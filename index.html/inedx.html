@@ -1,0 +1,2629 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AEGIS // PLANETARY DEFENSE COMMAND - Junior Astronaut Mission Trainer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-panel: rgba(10, 16, 28, 0.85);
+      --border-glow: rgba(56, 189, 248, 0.35);
+      --accent-cyan: #38bdf8;
+      --accent-amber: #f59e0b;
+      --accent-red: #ef4444;
+      --accent-emerald: #10b981;
+    }
+
+    * {
+      box-sizing: border-box;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(56, 189, 248, 0.4) rgba(15, 23, 42, 0.4);
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background-color: #020617;
+      color: #f1f5f9;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      user-select: none;
+    }
+
+    .font-mono-tech {
+      font-family: 'JetBrains Mono', monospace;
+      direction: ltr;
+      display: inline-block;
+    }
+
+    .font-orbitron {
+      font-family: 'Orbitron', sans-serif;
+    }
+
+    #canvas-container {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 1;
+    }
+
+    .glass-panel {
+      background: var(--bg-panel);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-glow);
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.75), inset 0 0 25px rgba(56, 189, 248, 0.06);
+    }
+
+    .hud-scanline {
+      background: linear-gradient(
+        to bottom,
+        rgba(255, 255, 255, 0),
+        rgba(255, 255, 255, 0) 50%,
+        rgba(56, 189, 248, 0.025) 50%,
+        rgba(56, 189, 248, 0.025)
+      );
+      background-size: 100% 4px;
+      pointer-events: none;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 6px;
+      background: rgba(30, 41, 59, 0.9);
+      border-radius: 999px;
+      outline: none;
+      border: 1px solid rgba(56, 189, 248, 0.25);
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #38bdf8;
+      cursor: pointer;
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.9);
+      border: 2px solid #ffffff;
+      transition: transform 0.15s ease, background 0.15s ease;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+      background: #7dd3fc;
+    }
+
+    input[type="range"].amber-slider::-webkit-slider-thumb {
+      background: #f59e0b;
+      box-shadow: 0 0 12px rgba(245, 158, 11, 0.9);
+    }
+
+    input[type="range"].emerald-slider::-webkit-slider-thumb {
+      background: #10b981;
+      box-shadow: 0 0 12px rgba(16, 185, 129, 0.9);
+    }
+
+    @keyframes pulse-border {
+      0%, 100% { border-color: rgba(239, 68, 68, 0.5); box-shadow: 0 0 15px rgba(239, 68, 68, 0.25); }
+      50% { border-color: rgba(239, 68, 68, 1); box-shadow: 0 0 30px rgba(239, 68, 68, 0.6); }
+    }
+
+    .threat-alert-box {
+      animation: pulse-border 2s infinite;
+    }
+
+    .corner-bracket {
+      position: relative;
+    }
+    .corner-bracket::before, .corner-bracket::after {
+      content: '';
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      border-color: #38bdf8;
+      border-style: solid;
+      pointer-events: none;
+    }
+    .corner-bracket::before {
+      top: -1px; left: -1px;
+      border-width: 2px 0 0 2px;
+      border-top-left-radius: 6px;
+    }
+    .corner-bracket::after {
+      bottom: -1px; right: -1px;
+      border-width: 0 2px 2px 0;
+      border-bottom-right-radius: 6px;
+    }
+
+    .sidebar-panel {
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+  </style>
+</head>
+<body class="antialiased selection:bg-sky-500 selection:text-white">
+
+  <!-- 3D WebGL Viewport -->
+  <div id="canvas-container"></div>
+  <div class="fixed inset-0 hud-scanline z-10"></div>
+
+  <!-- Top Header Bar -->
+  <header class="fixed top-0 inset-x-0 z-30 px-3 py-2 sm:px-5 sm:py-3 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+    <div class="glass-panel rounded-2xl px-3.5 py-2 flex items-center gap-3 pointer-events-auto">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 border border-sky-400/60 flex items-center justify-center shadow-lg">
+        <svg class="w-5 h-5 text-sky-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+        </svg>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="font-orbitron font-extrabold text-xs sm:text-sm tracking-wider text-white">NASA SPACE APPS <span class="text-sky-400">//</span> <span class="text-amber-300">JUNIOR ASTRONAUT MISSION TRAINER</span></h1>
+          <span id="status-badge" class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse">THREAT ACTIVE</span>
+        </div>
+        <p class="text-[11px] text-slate-300 hidden sm:block">Planetary Defense Command &amp; Asteroid Physics Academy</p>
+      </div>
+    </div>
+
+    <!-- Camera Views, Missions & Mobile Toggles -->
+    <div class="flex items-center gap-1.5 pointer-events-auto flex-wrap">
+      <div class="glass-panel rounded-xl p-1 flex items-center gap-1">
+        <button onclick="openMissionsModal()" class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-indigo-500/25 hover:bg-indigo-500/40 text-indigo-300 border border-indigo-400/40 transition flex items-center gap-1">
+          <span>🎯</span> <span id="mission-header-badge">Mission 1/6</span>
+        </button>
+        <button onclick="openCadetMissionsModal()" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 transition flex items-center gap-1">
+          <span>🎖️</span> <span id="cadet-rank-badge-text">Rookie (1/6)</span>
+        </button>
+        <button onclick="setCameraMode('overview')" id="cam-overview" class="cam-btn hidden sm:inline-block px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-sky-500/30 text-sky-300 border border-sky-400/40 transition">Overview</button>
+        <button onclick="setCameraMode('asteroid')" id="cam-asteroid" class="cam-btn hidden sm:inline-block px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:bg-slate-800/70 transition">Track Asteroid</button>
+        <button onclick="setCameraMode('earth')" id="cam-earth" class="cam-btn hidden sm:inline-block px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:bg-slate-800/70 transition">Impact Zone</button>
+      </div>
+
+      <!-- Mobile Panel Toggles (Left Controls & Right Live Telemetry) -->
+      <button onclick="toggleLeftPanel()" class="lg:hidden glass-panel rounded-xl px-2.5 py-2 text-sky-300 hover:bg-sky-500/20 text-xs font-bold flex items-center gap-1" aria-label="Toggle Physics Deck">
+        <span>⚙️</span><span class="hidden xs:inline">Deck</span>
+      </button>
+      <button onclick="toggleRightPanel()" class="lg:hidden glass-panel rounded-xl px-2.5 py-2 text-emerald-300 hover:bg-emerald-500/20 text-xs font-bold flex items-center gap-1" aria-label="Toggle Live Telemetry">
+        <span>📡</span><span class="hidden xs:inline">HUD</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Junior Astronaut Mission Briefing Modal -->
+  <div id="warning-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-md transition-opacity duration-300">
+    <div class="glass-panel threat-alert-box rounded-2xl max-w-lg w-full p-6 text-center relative overflow-hidden">
+      <div class="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-amber-400 to-transparent"></div>
+      <div class="w-16 h-16 mx-auto mb-3 rounded-2xl bg-amber-500/20 border border-amber-500/50 flex items-center justify-center text-amber-400 shadow-lg">
+        <svg class="w-9 h-9 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 100-6 3 3 0 000 6z"/>
+        </svg>
+      </div>
+      <span class="text-[11px] font-mono-tech uppercase tracking-widest text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/30">NASA Space Apps Challenge</span>
+      <h2 class="text-lg sm:text-xl font-extrabold text-white tracking-wide mt-2 mb-2">Welcome, Junior Astronaut Cadet!</h2>
+      <p class="text-sm text-slate-300 leading-relaxed mb-4">
+        You have been assigned to the <strong>Planetary Defense Mission Trainer</strong>. Complete 6 interactive physics &amp; planetary defense missions, pass cadet quizzes, and earn badges to protect Earth!
+      </p>
+      <div class="bg-slate-900/85 border border-slate-700/80 rounded-xl p-3 mb-5 text-xs grid grid-cols-2 gap-2 text-left">
+        <div>
+          <span class="text-slate-400 block">Training Curriculum:</span>
+          <span class="font-bold text-sky-400">6 Missions + Cadet Quizzes</span>
+        </div>
+        <div>
+          <span class="text-slate-400 block">Final Goal:</span>
+          <span class="font-bold text-amber-400">Commander Rank &amp; 6 Badges 🎖️</span>
+        </div>
+      </div>
+      <button onclick="dismissWarningModal()" class="w-full py-3.5 px-5 rounded-xl font-bold text-sm text-white bg-gradient-to-r from-sky-600 via-blue-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 shadow-xl shadow-sky-500/25 transition transform active:scale-95">
+        🚀 Begin Cadet Mission 1
+      </button>
+    </div>
+  </div>
+
+  <!-- Left / Primary Control Deck -->
+  <aside id="left-panel" class="sidebar-panel fixed top-16 bottom-3 left-3 z-20 w-[calc(100vw-1.5rem)] sm:w-80 lg:w-[360px] glass-panel rounded-2xl corner-bracket flex flex-col overflow-hidden">
+    <div class="p-3 border-b border-slate-700/60 flex items-center justify-between bg-slate-900/50">
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-sky-400 animate-ping"></span>
+        <h2 class="font-bold text-xs uppercase tracking-wider text-sky-300">Asteroid Physics Academy</h2>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <button onclick="generateRandomThreat()" class="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-[11px] font-bold transition flex items-center gap-1">
+          <span>🎲</span> <span>Random NEO</span>
+        </button>
+        <button onclick="toggleLeftPanel()" class="lg:hidden px-2 py-1 rounded-lg bg-slate-800 text-slate-300 text-xs">✕</button>
+      </div>
+    </div>
+
+    <div class="p-3 overflow-y-auto space-y-3.5 flex-1 text-xs">
+      <!-- Active Mission Tracker Card -->
+      <div class="bg-gradient-to-r from-indigo-950/90 to-slate-900/90 border border-indigo-500/50 rounded-xl p-2.5 space-y-1.5 shadow-md">
+        <div class="flex items-center justify-between">
+          <span id="hud-mission-title" class="font-bold text-indigo-300 text-xs">Mission 1: Asteroid Mass Lab</span>
+          <button onclick="openMissionsModal()" class="text-[10px] px-2 py-0.5 rounded bg-indigo-500/30 hover:bg-indigo-500/50 text-white font-semibold">Open Mission</button>
+        </div>
+        <p id="hud-mission-desc" class="text-[11px] text-slate-300 leading-snug">Calculate the asteroid's mass m = ρ·V and submit your answer in the Mission Console.</p>
+      </div>
+
+      <!-- Preset Scenarios -->
+      <div>
+        <label class="block text-slate-400 font-semibold mb-1">Mission Scenarios &amp; Real NEOs:</label>
+        <select id="preset-select" onchange="applyPreset(this.value)" class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-sky-400">
+          <option value="custom">-- Custom Cadet Parameters --</option>
+          <option value="chelyabinsk">Chelyabinsk Meteor (20m - Airburst)</option>
+          <option value="tunguska">Tunguska Event (60m - Stony Airburst)</option>
+          <option value="apophis" selected>99942 Apophis (370m - Silicate)</option>
+          <option value="bennu">101955 Bennu (490m - Carbonaceous)</option>
+          <option value="iron_impactor">Iron-Nickel Impactor (800m)</option>
+          <option value="chicxulub">Chicxulub Dinosaur Killer (5 km)</option>
+        </select>
+      </div>
+
+      <!-- Diameter Slider -->
+      <div class="bg-slate-900/50 p-2.5 rounded-xl border border-slate-800">
+        <div class="flex justify-between items-center mb-1">
+          <span class="text-slate-300 font-semibold">Asteroid Diameter (D):</span>
+          <span id="val-diameter" class="font-mono-tech font-bold text-sky-400">370 m</span>
+        </div>
+        <input type="range" id="slider-diameter" min="10" max="5000" step="10" value="370" oninput="onPhysicsParamChange()">
+        <div class="flex justify-between text-[10px] text-slate-500 mt-1 font-mono-tech">
+          <span>10m</span><span>1km</span><span>2.5km</span><span>5km</span>
+        </div>
+      </div>
+
+      <!-- Density & Composition -->
+      <div class="bg-slate-900/50 p-2.5 rounded-xl border border-slate-800">
+        <div class="flex justify-between items-center mb-1">
+          <span class="text-slate-300 font-semibold">Composition Density (ρ):</span>
+          <span id="val-density" class="font-mono-tech font-bold text-amber-400">3,200 kg/m³</span>
+        </div>
+        <input type="range" id="slider-density" class="amber-slider" min="900" max="8000" step="100" value="3200" oninput="onPhysicsParamChange()">
+        <div class="flex justify-between items-center mt-1.5">
+          <span id="composition-badge" class="text-[11px] px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">Stony Silicate (S-Type)</span>
+          <span id="entry-regime-badge" class="text-[10px] px-2 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/30">Surface Impact</span>
+        </div>
+      </div>
+
+      <!-- Initial Velocity -->
+      <div class="bg-slate-900/50 p-2.5 rounded-xl border border-slate-800">
+        <div class="flex justify-between items-center mb-1">
+          <span class="text-slate-300 font-semibold">Entry Velocity (v₀):</span>
+          <span id="val-velocity0" class="font-mono-tech font-bold text-sky-400">18.5 km/s</span>
+        </div>
+        <input type="range" id="slider-velocity" min="11" max="72" step="0.5" value="18.5" oninput="onPhysicsParamChange()">
+        <div class="flex justify-between text-[10px] text-slate-500 mt-1 font-mono-tech">
+          <span>11 km/s</span><span>40 km/s</span><span>72 km/s</span>
+        </div>
+      </div>
+
+      <!-- Entry Angle -->
+      <div class="bg-slate-900/50 p-2.5 rounded-xl border border-slate-800">
+        <div class="flex justify-between items-center mb-1">
+          <span class="text-slate-300 font-semibold">Impact Angle (θ):</span>
+          <span id="val-angle" class="font-mono-tech font-bold text-sky-400">45°</span>
+        </div>
+        <input type="range" id="slider-angle" min="15" max="90" step="1" value="45" oninput="onPhysicsParamChange()">
+      </div>
+
+      <!-- Derived Physics Formulas -->
+      <div class="bg-gradient-to-br from-slate-900/90 to-sky-950/40 p-3 rounded-xl border border-sky-500/30 space-y-2">
+        <div class="text-[11px] font-bold text-sky-300 uppercase tracking-wider border-b border-sky-500/20 pb-1 flex justify-between">
+          <span>Physics &amp; Mass Calculations</span>
+          <span class="text-amber-300">NASA Formulas</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div class="bg-slate-950/60 p-2 rounded-lg">
+            <span class="text-[10px] text-slate-400 block">Volume V = ⁴⁄₃πr³</span>
+            <span id="calc-volume" class="font-mono-tech font-bold text-slate-100 text-xs">2.65 × 10⁷ m³</span>
+          </div>
+          <div class="bg-slate-950/60 p-2 rounded-lg">
+            <span class="text-[10px] text-slate-400 block">Mass m = ρ · V</span>
+            <span id="calc-mass" class="font-mono-tech font-bold text-amber-300 text-xs">8.49 × 10¹⁰ kg</span>
+          </div>
+          <div class="bg-slate-950/60 p-2 rounded-lg">
+            <span class="text-[10px] text-slate-400 block">Energy Ek = ½mv²</span>
+            <span id="calc-energy" class="font-mono-tech font-bold text-red-400 text-xs">3,470 MT</span>
+          </div>
+          <div class="bg-slate-950/60 p-2 rounded-lg">
+            <span class="text-[10px] text-slate-400 block">Breakup / Crater</span>
+            <span id="calc-crater" class="font-mono-tech font-bold text-orange-400 text-xs">6.84 km</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Planetary Defense Mission Section (4 Distinct Models + Lead Time) -->
+      <div class="bg-emerald-950/25 border border-emerald-500/35 rounded-xl p-3 space-y-2.5">
+        <div class="flex items-center justify-between">
+          <span class="font-bold text-emerald-400 text-xs flex items-center gap-1.5">
+            <span>🛡️</span> <span>Planetary Defense System</span>
+          </span>
+          <button onclick="openSystemsModal()" class="text-[10px] underline text-sky-300 hover:text-sky-200">Tech Guide</button>
+        </div>
+
+        <select id="deflection-method" onchange="onDeflectionChange()" class="w-full bg-slate-900/90 border border-emerald-500/30 rounded-lg px-2.5 py-1.5 text-slate-200">
+          <option value="none">No Intervention (Ballistic Impact)</option>
+          <option value="kinetic">1. Kinetic Impactor (DART Mission)</option>
+          <option value="laser">2. Focused Laser Ablation</option>
+          <option value="gravity">3. Gravity Tractor Spacecraft</option>
+          <option value="nuclear">4. Nuclear Standoff Pulse (Last Resort)</option>
+        </select>
+
+        <!-- Lead Time Slider (Always visible to teach Δx ≈ Δv × t_lead) -->
+        <div class="bg-slate-950/60 p-2 rounded-lg border border-emerald-500/20">
+          <div class="flex justify-between text-[11px] mb-1">
+            <span class="text-slate-300">Warning Lead Time (t_lead):</span>
+            <span id="val-leadtime" class="font-mono-tech font-bold text-amber-300">5.0 Years</span>
+          </div>
+          <input type="range" id="slider-leadtime" class="amber-slider" min="0.02" max="20" step="0.02" value="5.0" oninput="onDeflectionChange()">
+          <p class="text-[10px] text-slate-400 mt-1 leading-tight">
+            Physics Rule: Lateral shift <span class="font-mono-tech text-emerald-300">Δx ≈ 3 · Δv · t_lead</span>. Earlier warning requires much smaller <span class="font-mono-tech">Δv</span>!
+          </p>
+        </div>
+
+        <div id="deflection-controls" class="hidden space-y-2">
+          <!-- Method-Specific Parameter Control -->
+          <div id="method-param-box" class="bg-slate-950/60 p-2 rounded-lg border border-slate-800 space-y-1">
+            <div class="flex justify-between text-[11px]">
+              <span id="method-param-label" class="text-slate-300">Momentum Enhancement (β):</span>
+              <span id="val-method-param" class="font-mono-tech font-bold text-sky-400">3.6</span>
+            </div>
+            <input type="range" id="slider-method-param" min="1" max="5" step="0.1" value="3.6" oninput="onDeflectionChange()">
+            <p id="method-formula-note" class="text-[10px] text-slate-400 font-mono-tech"></p>
+          </div>
+
+          <div id="nuclear-warning-box" class="hidden bg-red-950/60 border border-red-500/50 rounded-lg p-2 text-[10px] text-red-200">
+            ⚠️ <strong>LAST RESORT WARNING:</strong> Nuclear standoff pulse is reserved only for massive NEOs with short lead time where non-nuclear methods cannot generate enough Δv, due to fragmentation &amp; treaty risks.
+          </div>
+
+          <div class="flex justify-between items-center text-[11px] bg-slate-900/90 px-2.5 py-1.5 rounded-lg border border-emerald-500/30">
+            <span class="text-slate-300">Computed Δv / Shift:</span>
+            <span id="val-computed-dv" class="font-mono-tech font-bold text-emerald-400">0.00 mm/s (0 km)</span>
+          </div>
+
+          <button onclick="launchDeflectionMission()" id="btn-launch-defense" class="w-full py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/25 transition">
+            🚀 Launch Interceptor Spacecraft
+          </button>
+        </div>
+      </div>
+
+      <!-- Impact Location & Report -->
+      <div class="bg-slate-900/60 border border-slate-700/70 rounded-xl p-3 space-y-2">
+        <label class="block text-slate-300 font-semibold">Target Location Override (Optional):</label>
+        <input type="text" id="target-location" placeholder="e.g., Cairo, Tokyo, Pacific Ocean..." class="w-full bg-slate-950/80 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-sky-400">
+        <button onclick="generateImpactReport()" class="w-full py-2 rounded-lg bg-indigo-600/80 hover:bg-indigo-500 border border-indigo-400/40 text-white font-bold text-xs transition flex items-center justify-center gap-1.5">
+          <span>📊</span> <span>Generate Cadet Impact Report</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Bottom Playback Bar -->
+    <div class="p-3 bg-slate-950/90 border-t border-slate-800 space-y-2">
+      <div class="flex items-center justify-between gap-2">
+        <button id="btn-sim-toggle" onclick="toggleSimulation()" class="flex-1 py-2 px-3 rounded-xl font-bold text-xs bg-sky-600 hover:bg-sky-500 text-white shadow-lg shadow-sky-500/20 transition flex items-center justify-center gap-1.5">
+          <span id="sim-icon">▶</span> <span id="sim-btn-text">Start Simulation</span>
+        </button>
+        <button onclick="resetSimulation()" class="py-2 px-3 rounded-xl font-bold text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 transition">
+          Reset
+        </button>
+      </div>
+      <div class="flex items-center justify-between text-[11px] bg-slate-900/90 px-2.5 py-1.5 rounded-lg border border-slate-800">
+        <span class="text-slate-400">Time Warp:</span>
+        <div class="flex gap-1 font-mono-tech">
+          <button onclick="setTimeScale(1)" class="warp-btn px-2 py-0.5 rounded bg-sky-500/30 text-sky-300 border border-sky-400/40" data-warp="1">1x</button>
+          <button onclick="setTimeScale(3)" class="warp-btn px-2 py-0.5 rounded text-slate-400 hover:bg-slate-800" data-warp="3">3x</button>
+          <button onclick="setTimeScale(8)" class="warp-btn px-2 py-0.5 rounded text-slate-400 hover:bg-slate-800" data-warp="8">8x</button>
+          <button onclick="setTimeScale(20)" class="warp-btn px-2 py-0.5 rounded text-slate-400 hover:bg-slate-800" data-warp="20">20x</button>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Right Live Telemetry & Physics HUD (Toggleable on Mobile) -->
+  <aside id="right-panel" class="sidebar-panel hidden lg:flex fixed top-16 right-3 z-20 w-[calc(100vw-1.5rem)] sm:w-80 glass-panel rounded-2xl corner-bracket flex-col overflow-hidden max-h-[calc(100vh-5rem)]">
+    <div class="p-3 border-b border-slate-700/60 bg-slate-900/40 flex items-center justify-between">
+      <h3 class="font-bold text-xs uppercase tracking-wider text-sky-300">Live Physics Telemetry</h3>
+      <div class="flex items-center gap-2">
+        <span class="font-mono-tech text-[10px] text-emerald-400">● LIVE 60Hz</span>
+        <button onclick="toggleRightPanel()" class="lg:hidden px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-xs">✕</button>
+      </div>
+    </div>
+
+    <div class="p-3.5 overflow-y-auto space-y-3 text-xs">
+      <!-- Altitude & TTI (Dynamically Computed from Scene Distance & Velocity) -->
+      <div class="grid grid-cols-2 gap-2">
+        <div class="bg-slate-950/75 p-2.5 rounded-xl border border-slate-800">
+          <span class="text-[10px] text-slate-400 block">Altitude Above Surface</span>
+          <span id="tel-distance" class="font-mono-tech font-bold text-sm text-sky-400">-- km</span>
+        </div>
+        <div class="bg-slate-950/75 p-2.5 rounded-xl border border-slate-800">
+          <span class="text-[10px] text-slate-400 block">Time to Impact (TTI)</span>
+          <span id="tel-tti" class="font-mono-tech font-bold text-sm text-amber-400">--</span>
+        </div>
+      </div>
+
+      <!-- Instantaneous Velocity & Gravity Acceleration -->
+      <div class="bg-slate-950/75 p-3 rounded-xl border border-sky-500/25 space-y-2.5">
+        <div>
+          <div class="flex justify-between items-baseline">
+            <span class="text-slate-300 font-semibold">Velocity v(t):</span>
+            <span id="tel-velocity" class="font-mono-tech font-bold text-base text-white">-- km/s</span>
+          </div>
+          <div class="w-full h-1.5 bg-slate-800 rounded-full mt-1 overflow-hidden">
+            <div id="bar-velocity" class="h-full bg-gradient-to-r from-sky-400 to-indigo-500 transition-all duration-100" style="width: 26%"></div>
+          </div>
+        </div>
+
+        <div>
+          <div class="flex justify-between items-baseline">
+            <span class="text-slate-300 font-semibold">Gravity Acceleration g(r):</span>
+            <span id="tel-accel" class="font-mono-tech font-bold text-sm text-amber-400">-- m/s²</span>
+          </div>
+          <div class="w-full h-1.5 bg-slate-800 rounded-full mt-1 overflow-hidden">
+            <div id="bar-accel" class="h-full bg-gradient-to-r from-amber-400 to-red-500 transition-all duration-100" style="width: 2%"></div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-800/80 text-[11px]">
+          <div>
+            <span class="text-slate-400 block">Gravitational Pull (F):</span>
+            <span id="tel-force" class="font-mono-tech font-semibold text-slate-200">-- N</span>
+          </div>
+          <div>
+            <span class="text-slate-400 block">Dynamic Pressure (½ρv²):</span>
+            <span id="tel-pressure" class="font-mono-tech font-semibold text-cyan-300">0.00 kPa</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Physics Graph Canvas -->
+      <div class="bg-slate-950/85 p-2.5 rounded-xl border border-slate-800">
+        <div class="flex justify-between items-center mb-1.5 text-[10px]">
+          <span class="text-slate-400 font-semibold">Velocity &amp; Acceleration Curve</span>
+          <div class="flex gap-2 font-mono-tech">
+            <span class="text-sky-400">― v(t)</span>
+            <span class="text-amber-400">― a(t)</span>
+          </div>
+        </div>
+        <canvas id="telemetry-chart" width="280" height="85" class="w-full h-[85px] rounded bg-slate-900/50"></canvas>
+      </div>
+
+      <!-- Impact Effects Summary -->
+      <div class="bg-red-950/20 border border-red-500/25 rounded-xl p-2.5 space-y-1.5">
+        <div class="text-[11px] font-bold text-red-400">Predicted Impact &amp; Atmospheric Effects:</div>
+        <div class="flex justify-between text-[11px]">
+          <span class="text-slate-400">Target Region:</span>
+          <span id="eff-region" class="font-mono-tech font-bold text-sky-300 text-right">Scanning...</span>
+        </div>
+        <div class="flex justify-between text-[11px]">
+          <span class="text-slate-400">Coordinates (Lat, Lon):</span>
+          <span id="eff-coords" class="font-mono-tech font-bold text-slate-200">--°, --°</span>
+        </div>
+        <div class="flex justify-between text-[11px]">
+          <span class="text-slate-400">Breakup Altitude:</span>
+          <span id="eff-breakup" class="font-mono-tech font-bold text-cyan-300">Surface Impact</span>
+        </div>
+        <div class="flex justify-between text-[11px]">
+          <span class="text-slate-400">Seismic Magnitude:</span>
+          <span id="eff-seismic" class="font-mono-tech font-bold text-amber-300">7.4 Mw</span>
+        </div>
+        <div class="flex justify-between text-[11px]">
+          <span class="text-slate-400">Shockwave Radius:</span>
+          <span id="eff-airblast" class="font-mono-tech font-bold text-orange-300">48.2 km</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Impact / Mission Outcome Banner -->
+  <div id="event-toast" class="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 glass-panel px-4 py-3 rounded-2xl border border-sky-400/40 hidden items-center gap-3 shadow-2xl max-w-xl w-[94vw]">
+    <div id="event-toast-icon" class="text-2xl">💥</div>
+    <div class="flex-1">
+      <h4 id="event-toast-title" class="font-bold text-xs sm:text-sm text-white"></h4>
+      <p id="event-toast-desc" class="text-[11px] sm:text-xs text-slate-300 mt-0.5"></p>
+    </div>
+    <button onclick="resetSimulation()" class="px-3 py-1.5 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 text-xs font-bold border border-sky-400/30">Replay</button>
+  </div>
+
+  <!-- Interactive Cadet Missions & Quiz Modal (6 Sequential Missions) -->
+  <div id="missions-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+    <div class="glass-panel rounded-2xl max-w-2xl w-full max-h-[88vh] flex flex-col overflow-hidden border-indigo-500/50">
+      <div class="p-4 border-b border-slate-700 flex items-center justify-between bg-indigo-950/40">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">🎯</span>
+          <h3 class="font-bold text-sm sm:text-base text-indigo-300">Junior Astronaut Training Missions (6-Stage Curriculum)</h3>
+        </div>
+        <button onclick="closeMissionsModal()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center">✕</button>
+      </div>
+
+      <!-- Mission Tabs Selector -->
+      <div class="px-4 pt-3 pb-2 bg-slate-900/60 border-b border-slate-800 flex gap-1.5 overflow-x-auto" id="mission-tabs-bar"></div>
+
+      <!-- Active Mission Body -->
+      <div class="p-5 overflow-y-auto space-y-4 text-xs sm:text-sm text-slate-200 flex-1" id="mission-modal-body"></div>
+
+      <div class="p-3 border-t border-slate-800 bg-slate-900/80 flex items-center justify-between">
+        <span id="mission-progress-summary" class="text-xs font-mono-tech text-amber-300">Completed: 0 / 6 Missions</span>
+        <button onclick="closeMissionsModal()" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition">Back to Simulator</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cadet Badges & Ranks Modal -->
+  <div id="cadet-missions-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm">
+    <div class="glass-panel rounded-2xl max-w-xl w-full max-h-[85vh] flex flex-col overflow-hidden border-amber-500/40">
+      <div class="p-4 border-b border-slate-700 flex items-center justify-between bg-amber-950/30">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">🎖️</span>
+          <h3 class="font-bold text-base text-amber-300">Junior Astronaut Ranks &amp; Earned Badges</h3>
+        </div>
+        <button onclick="closeCadetMissionsModal()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center">✕</button>
+      </div>
+      <div class="p-5 overflow-y-auto space-y-3 text-xs sm:text-sm text-slate-200">
+        <div class="bg-slate-900/80 p-3.5 rounded-xl border border-slate-700 flex items-center justify-between">
+          <div>
+            <div class="font-bold text-white text-sm">Current Rank: <span id="modal-cadet-rank" class="text-amber-400">Rookie Space Cadet 🌱</span></div>
+            <p class="text-xs text-slate-400 mt-0.5">Complete missions, pass quizzes, and successfully deflect NEOs to earn all 6 NASA Space Apps badges.</p>
+          </div>
+          <div id="badge-icon-display" class="text-3xl">🌱</div>
+        </div>
+        <div class="space-y-2 pt-1">
+          <h4 class="font-bold text-sky-300 uppercase text-xs tracking-wider">Cadet Badge Locker:</h4>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div class="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800 flex items-center gap-2.5 opacity-45 transition" id="b-rookie">
+              <span class="text-2xl">🔭</span>
+              <div><div class="font-bold text-white text-xs">1. Radar Cadet</div><span class="text-[10px] text-slate-400">Initialize AEGIS Planetary Radar</span></div>
+            </div>
+            <div class="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800 flex items-center gap-2.5 opacity-45 transition" id="b-physicist">
+              <span class="text-2xl">📐</span>
+              <div><div class="font-bold text-white text-xs">2. Mass &amp; Energy Analyst</div><span class="text-[10px] text-slate-400">Pass Missions 1 &amp; 2 (m = ρV &amp; Ek = ½mv²)</span></div>
+            </div>
+            <div class="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800 flex items-center gap-2.5 opacity-45 transition" id="b-hero">
+              <span class="text-2xl">🛡️</span>
+              <div><div class="font-bold text-white text-xs">3. Planetary Savior</div><span class="text-[10px] text-slate-400">Successfully deflect an NEO off Earth impact</span></div>
+            </div>
+            <div class="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800 flex items-center gap-2.5 opacity-45 transition" id="b-strategist">
+              <span class="text-2xl">🚨</span>
+              <div><div class="font-bold text-white text-xs">4. Crisis Strategist</div><span class="text-[10px] text-slate-400">Pass Mission 4 short-warning decision</span></div>
+            </div>
+            <div class="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800 flex items-center gap-2.5 opacity-45 transition" id="b-atmospheric">
+              <span class="text-2xl">☄️</span>
+              <div><div class="font-bold text-white text-xs">5. Atmospheric Specialist</div><span class="text-[10px] text-slate-400">Pass Mission 5 Chelyabinsk airburst lab</span></div>
+            </div>
+            <div class="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800 flex items-center gap-2.5 opacity-45 transition" id="b-commander">
+              <span class="text-2xl">👑</span>
+              <div><div class="font-bold text-white text-xs">6. AEGIS Flight Commander</div><span class="text-[10px] text-slate-400">Complete Final Random NEO Mission 6</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="p-3 border-t border-slate-800 bg-slate-900/70 flex justify-end">
+        <button onclick="closeCadetMissionsModal()" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs transition">Resume Training</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Advanced Deflection Systems Modal (All 4 Methods Documented) -->
+  <div id="systems-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm">
+    <div class="glass-panel rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden">
+      <div class="p-4 border-b border-slate-700 flex items-center justify-between bg-slate-900/60">
+        <h3 class="font-bold text-base text-sky-300">Planetary Defense Technologies Guide (All 4 Methods)</h3>
+        <button onclick="closeSystemsModal()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center">✕</button>
+      </div>
+      <div class="p-5 overflow-y-auto space-y-3 text-xs sm:text-sm leading-relaxed" id="systems-modal-content"></div>
+    </div>
+  </div>
+
+  <!-- Impact Assessment Report Modal -->
+  <div id="report-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm">
+    <div class="glass-panel rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden border-indigo-500/40">
+      <div class="p-4 border-b border-slate-700 flex items-center justify-between bg-indigo-950/40">
+        <div class="flex items-center gap-2">
+          <span class="text-lg">📑</span>
+          <h3 class="font-bold text-base text-indigo-300">NASA Junior Astronaut Impact Assessment Report</h3>
+        </div>
+        <button onclick="closeReportModal()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center">✕</button>
+      </div>
+      <div class="p-5 overflow-y-auto space-y-3 text-xs sm:text-sm leading-relaxed text-slate-200" id="report-modal-content"></div>
+      <div class="p-3 border-t border-slate-800 bg-slate-900/70 flex justify-end gap-2">
+        <button id="btn-copy-report" onclick="copyReportText()" class="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs transition">Copy Report</button>
+        <button onclick="closeReportModal()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // 1. CONSTANTS, PHYSICS ENGINE & CADET STATE
+    // =========================================================================
+    const G_CONST = 6.67430e-11;
+    const EARTH_MASS = 5.972e24;
+    const EARTH_RADIUS_KM = 6371.0;
+    const EARTH_RADIUS_M = 6.371e6;
+    const ATMO_HEIGHT_KM = 100.0;
+    const SCENE_EARTH_RADIUS = 10.0;
+    const KM_PER_UNIT = EARTH_RADIUS_KM / SCENE_EARTH_RADIUS; // 637.1 km per scene unit
+    const START_ALTITUDE_UNITS = 42.0; // 42 * 637.1 = 26,758 km initial altitude
+    const BASE_SCENE_SPEED_AT_18_5 = 4.2; // Scene units per simulated second at 18.5 km/s
+
+    // Real-time scaling: each simulated second represents TIME_COMPRESSION_FACTOR real seconds
+    // so that TTI = (altitude_km / instSpeed_kms) matches the visual countdown & timeWarp!
+    function getTimeCompressionFactor() {
+      const realStartSpeed_kms = 18.5;
+      const realSecondsToTravelOneUnit = KM_PER_UNIT / realStartSpeed_kms; // ~34.438 real sec / unit
+      return realSecondsToTravelOneUnit * BASE_SCENE_SPEED_AT_18_5; // ~144.64 real sec per sim sec
+    }
+
+    const physicsState = {
+      diameter: 370,
+      density: 3200,
+      v0_kms: 18.5,
+      entryAngleDeg: 45,
+      volume_m3: 0,
+      mass_kg: 0,
+      kineticEnergy_J: 0,
+      kineticEnergy_MT: 0,
+      crater_km: 0,
+      seismic_Mw: 0,
+      airblast_km: 0,
+      thermal_km: 0,
+      breakupAltitude_km: 0,
+      willAirburst: false,
+
+      running: false,
+      ended: false,
+      outcome: null,
+      timeScale: 1,
+      simTime: 0,
+
+      pos: new THREE.Vector3(),
+      vel: new THREE.Vector3(),
+      instSpeed_kms: 18.5,
+      instAccel_ms2: 0.08,
+      gravForce_N: 0,
+      altitude_km: START_ALTITUDE_UNITS * KM_PER_UNIT,
+      dynamicPressure_kPa: 0,
+
+      // Deflection State (4 Distinct Physical Models + Lead Time)
+      deflectionMethod: 'none',
+      leadTimeYears: 5.0,
+      methodParam: 3.6,
+      computedDeltaV_mms: 0,
+      computedShift_km: 0,
+      deflectionTriggered: false,
+      deflectionProgress: 0,
+
+      historyV: [],
+      historyA: [],
+      presetsTested: new Set(['apophis']),
+      badges: {
+        rookie: true,
+        physicist: false,
+        hero: false,
+        strategist: false,
+        atmospheric: false,
+        commander: false
+      },
+      activeMissionIndex: 0,
+      missionsCompleted: [false, false, false, false, false, false],
+      quizPassed: [false, false, false, false, false, false],
+      mission2BaselineEnergy_MT: null,
+      mission4Decision: null,
+      mission6TargetGenerated: false
+    };
+
+    const presets = {
+      chelyabinsk:   { d: 20,   rho: 3300, v: 19.0, angle: 18 },
+      tunguska:      { d: 60,   rho: 2800, v: 15.0, angle: 35 },
+      apophis:       { d: 370,  rho: 3200, v: 18.5, angle: 45 },
+      bennu:         { d: 490,  rho: 1190, v: 12.7, angle: 40 },
+      iron_impactor: { d: 800,  rho: 7800, v: 24.0, angle: 60 },
+      chicxulub:     { d: 5000, rho: 3000, v: 20.0, angle: 60 }
+    };
+
+    // =========================================================================
+    // 2. GEOGRAPHIC CONTINENT POLYGONS / BOUNDING REGIONS (LAT/LON UNIFIED)
+    // =========================================================================
+    const CONTINENT_REGIONS = [
+      {
+        name: 'Antarctica',
+        isOcean: false,
+        color: '#f8fafc',
+        boxes: [{ minLat: -90, maxLat: -66, minLon: -180, maxLon: 180 }]
+      },
+      {
+        name: 'Greenland',
+        isOcean: false,
+        color: '#e2e8f0',
+        boxes: [{ minLat: 60, maxLat: 84, minLon: -72, maxLon: -15 }]
+      },
+      {
+        name: 'North America',
+        isOcean: false,
+        color: '#2d6a4f',
+        boxes: [
+          { minLat: 50, maxLat: 72, minLon: -168, maxLon: -55 },
+          { minLat: 25, maxLat: 50, minLon: -128, maxLon: -65 },
+          { minLat: 8,  maxLat: 25, minLon: -115, maxLon: -78 }
+        ]
+      },
+      {
+        name: 'South America',
+        isOcean: false,
+        color: '#40916c',
+        boxes: [
+          { minLat: -15, maxLat: 12, minLon: -81, maxLon: -35 },
+          { minLat: -55, maxLat: -15, minLon: -75, maxLon: -40 }
+        ]
+      },
+      {
+        name: 'Europe',
+        isOcean: false,
+        color: '#52b788',
+        boxes: [
+          { minLat: 36, maxLat: 71, minLon: -10, maxLon: 42 }
+        ]
+      },
+      {
+        name: 'Africa',
+        isOcean: false,
+        color: '#c29958',
+        boxes: [
+          { minLat: 5,   maxLat: 37, minLon: -18, maxLon: 51 },
+          { minLat: -35, maxLat: 5,  minLon: 8,   maxLon: 42 }
+        ]
+      },
+      {
+        name: 'Asia',
+        isOcean: false,
+        color: '#386641',
+        boxes: [
+          { minLat: 12, maxLat: 42, minLon: 35,  maxLon: 60 },
+          { minLat: 42, maxLat: 75, minLon: 42,  maxLon: 178 },
+          { minLat: 5,  maxLat: 42, minLon: 60,  maxLon: 145 }
+        ]
+      },
+      {
+        name: 'Australia & Oceania',
+        isOcean: false,
+        color: '#b07d4f',
+        boxes: [
+          { minLat: -44, maxLat: -11, minLon: 112, maxLon: 155 },
+          { minLat: -47, maxLat: -34, minLon: 165, maxLon: 179 }
+        ]
+      }
+    ];
+
+    function classifyLatLon(lat, lon) {
+      for (const cont of CONTINENT_REGIONS) {
+        for (const b of cont.boxes) {
+          if (lat >= b.minLat && lat <= b.maxLat && lon >= b.minLon && lon <= b.maxLon) {
+            return { region: cont.name, isOcean: cont.isOcean };
+          }
+        }
+      }
+      let oceanName = 'Pacific Ocean';
+      if (lat > 68) {
+        oceanName = 'Arctic Ocean';
+      } else if (lat < -58) {
+        oceanName = 'Southern Ocean';
+      } else if (lon >= -75 && lon <= 20) {
+        oceanName = lat >= 0 ? 'North Atlantic Ocean' : 'South Atlantic Ocean';
+      } else if (lon > 20 && lon <= 115 && lat < 25) {
+        oceanName = 'Indian Ocean';
+      } else {
+        oceanName = lat >= 0 ? 'North Pacific Ocean' : 'South Pacific Ocean';
+      }
+      return { region: oceanName, isOcean: true };
+    }
+
+    function getGeographicLocationFromWorldPoint(worldPoint) {
+      if (!earthMesh) return { lat: 0, lon: 0, latStr: '0.00° N', lonStr: '0.00° E', region: 'Scanning...', isOcean: true };
+
+      const localPt = earthMesh.worldToLocal(worldPoint.clone()).normalize();
+      const lat = Math.asin(Math.max(-1, Math.min(1, localPt.y))) * (180 / Math.PI);
+      const u = 0.5 + Math.atan2(localPt.z, -localPt.x) / (2 * Math.PI);
+      let lon = (u - 0.5) * 360;
+      if (lon > 180) lon -= 360;
+      if (lon < -180) lon += 360;
+
+      const { region, isOcean } = classifyLatLon(lat, lon);
+      const latStr = `${Math.abs(lat).toFixed(2)}° ${lat >= 0 ? 'N' : 'S'}`;
+      const lonStr = `${Math.abs(lon).toFixed(2)}° ${lon >= 0 ? 'E' : 'W'}`;
+      return { lat, lon, latStr, lonStr, region, isOcean };
+    }
+
+    // =========================================================================
+    // 3. ATMOSPHERIC BREAKUP & IMPACT PHYSICS CALCULATIONS
+    // =========================================================================
+    function computeAtmosphericBreakup(D, rho, v_kms, angleDeg) {
+      const Y_strength_Pa = Math.pow(10, 2.107 + 0.0624 * Math.sqrt(rho));
+      const v_ms = v_kms * 1000.0;
+      const rho_air0 = 1.225;
+      const H_scale = 8.5;
+
+      const rho_air_breakup = Y_strength_Pa / (v_ms * v_ms);
+      let z_breakup_km = rho_air_breakup < rho_air0
+        ? -H_scale * Math.log(rho_air_breakup / rho_air0)
+        : 0;
+
+      const sinTheta = Math.sin((angleDeg * Math.PI) / 180);
+      const ballisticColumn = rho * D * sinTheta;
+      const criticalColumn = 3.2e5;
+
+      if (ballisticColumn >= criticalColumn) {
+        return { willAirburst: false, breakupAltitude_km: 0 };
+      }
+
+      z_breakup_km = Math.max(8, Math.min(45, z_breakup_km + (1 - sinTheta) * 10));
+      return { willAirburst: true, breakupAltitude_km: z_breakup_km };
+    }
+
+    function applyPreset(key) {
+      if (!presets[key]) return;
+      physicsState.presetsTested.add(key);
+      const p = presets[key];
+      document.getElementById('slider-diameter').value = p.d;
+      document.getElementById('slider-density').value = p.rho;
+      document.getElementById('slider-velocity').value = p.v;
+      document.getElementById('slider-angle').value = p.angle;
+      onPhysicsParamChange();
+      resetSimulation();
+      evaluateActiveMissionProgress();
+    }
+
+    function generateRandomThreat() {
+      const d = Math.round(Math.pow(10, 1.4 + Math.random() * 2.1) / 10) * 10;
+      const rhos = [1100, 2100, 3200, 3600, 7800];
+      const rho = rhos[Math.floor(Math.random() * rhos.length)];
+      const v = +(13 + Math.random() * 40).toFixed(1);
+      const angle = Math.round(25 + Math.random() * 60);
+
+      document.getElementById('preset-select').value = 'custom';
+      document.getElementById('slider-diameter').value = d;
+      document.getElementById('slider-density').value = rho;
+      document.getElementById('slider-velocity').value = v;
+      document.getElementById('slider-angle').value = angle;
+
+      onPhysicsParamChange();
+      resetSimulation();
+    }
+
+    function formatScientific(num, unit = '') {
+      if (num === 0) return `0 ${unit}`;
+      const exp = Math.floor(Math.log10(Math.abs(num)));
+      if (exp >= -2 && exp <= 4) {
+        return `${num.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${unit}`;
+      }
+      const mantissa = (num / Math.pow(10, exp)).toFixed(2);
+      const superscripts = { '-': '⁻', '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹' };
+      const expStr = String(exp).split('').map(c => superscripts[c] || c).join('');
+      return `${mantissa} × 10${expStr} ${unit}`;
+    }
+
+    function onPhysicsParamChange() {
+      const D = parseFloat(document.getElementById('slider-diameter').value);
+      const rho = parseFloat(document.getElementById('slider-density').value);
+      const v0 = parseFloat(document.getElementById('slider-velocity').value);
+      const angle = parseFloat(document.getElementById('slider-angle').value);
+
+      physicsState.diameter = D;
+      physicsState.density = rho;
+      physicsState.v0_kms = v0;
+      physicsState.entryAngleDeg = angle;
+
+      document.getElementById('val-diameter').textContent = D >= 1000 ? `${(D / 1000).toFixed(2)} km` : `${D} m`;
+      document.getElementById('val-density').textContent = `${rho.toLocaleString('en-US')} kg/m³`;
+      document.getElementById('val-velocity0').textContent = `${v0.toFixed(1)} km/s`;
+      document.getElementById('val-angle').textContent = `${angle}°`;
+
+      const compBadge = document.getElementById('composition-badge');
+      if (rho < 1500) compBadge.textContent = 'Porous Ice / Comet';
+      else if (rho < 2600) compBadge.textContent = 'Carbonaceous (C-Type)';
+      else if (rho < 5000) compBadge.textContent = 'Stony Silicate (S-Type)';
+      else compBadge.textContent = 'Dense Iron-Nickel (M-Type)';
+
+      const radius_m = D / 2.0;
+      const V = (4.0 / 3.0) * Math.PI * Math.pow(radius_m, 3);
+      const m = rho * V;
+
+      const startDist_m = (EARTH_RADIUS_KM + START_ALTITUDE_UNITS * KM_PER_UNIT) * 1000.0;
+      const v_impact_ms = Math.sqrt(Math.pow(v0 * 1000, 2) + 2 * G_CONST * EARTH_MASS * (1 / EARTH_RADIUS_M - 1 / startDist_m));
+      const Ek_J = 0.5 * m * Math.pow(v_impact_ms, 2);
+      const Ek_MT = Ek_J / 4.184e15;
+
+      const breakup = computeAtmosphericBreakup(D, rho, v0, angle);
+      physicsState.willAirburst = breakup.willAirburst;
+      physicsState.breakupAltitude_km = breakup.breakupAltitude_km;
+
+      const sinTheta = Math.sin((angle * Math.PI) / 180);
+      const crater_m = 1.161 * Math.pow(rho / 2700, 1 / 3) * Math.pow(D, 0.78) * Math.pow(v_impact_ms, 0.44) * Math.pow(9.81, -0.22) * Math.pow(sinTheta, 1 / 3);
+      const crater_km = breakup.willAirburst ? 0 : crater_m / 1000.0;
+
+      const seismic_Mw = Math.max(1.0, (Math.log10(Ek_J * 1e-4) - 4.8) / 1.5);
+      const airblast_km = 2.2 * Math.pow(Ek_MT, 1 / 3);
+
+      physicsState.volume_m3 = V;
+      physicsState.mass_kg = m;
+      physicsState.kineticEnergy_J = Ek_J;
+      physicsState.kineticEnergy_MT = Ek_MT;
+      physicsState.crater_km = crater_km;
+      physicsState.seismic_Mw = seismic_Mw;
+      physicsState.airblast_km = airblast_km;
+      physicsState.lastImpactGeo = null;
+
+      document.getElementById('calc-volume').textContent = formatScientific(V, 'm³');
+      document.getElementById('calc-mass').textContent = formatScientific(m, 'kg');
+      document.getElementById('calc-energy').textContent = Ek_MT >= 1000 ? `${(Ek_MT / 1000).toFixed(2)} GT` : `${Ek_MT.toFixed(2)} MT`;
+
+      const regimeBadge = document.getElementById('entry-regime-badge');
+      if (breakup.willAirburst) {
+        document.getElementById('calc-crater').textContent = `Airburst @ ${breakup.breakupAltitude_km.toFixed(1)} km`;
+        document.getElementById('eff-breakup').textContent = `${breakup.breakupAltitude_km.toFixed(1)} km (Airburst)`;
+        regimeBadge.textContent = `Airburst (${breakup.breakupAltitude_km.toFixed(0)} km)`;
+        regimeBadge.className = 'text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30';
+      } else {
+        document.getElementById('calc-crater').textContent = `${crater_km.toFixed(2)} km crater`;
+        document.getElementById('eff-breakup').textContent = 'None (Reaches Surface)';
+        regimeBadge.textContent = 'Surface Impact';
+        regimeBadge.className = 'text-[10px] px-2 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/30';
+      }
+
+      document.getElementById('eff-seismic').textContent = `${seismic_Mw.toFixed(1)} Mw`;
+      document.getElementById('eff-airblast').textContent = `${airblast_km.toFixed(1)} km`;
+
+      onDeflectionChange();
+      if (typeof updateAsteroidVisualScale === 'function') {
+        updateAsteroidVisualScale();
+      }
+      if (!physicsState.running && !physicsState.ended) {
+        initializeTrajectoryVectors();
+        updateLiveTelemetryUI();
+      }
+      evaluateActiveMissionProgress();
+    }
+
+    // =========================================================================
+    // 4. FOUR DISTINCT DEFLECTION PHYSICS MODELS + LEAD TIME
+    // =========================================================================
+    function computeDeflectionPhysics() {
+      const method = physicsState.deflectionMethod;
+      const t_lead_yr = physicsState.leadTimeYears;
+      const t_lead_sec = t_lead_yr * 365.25 * 86400;
+      const M = Math.max(1e5, physicsState.mass_kg);
+      const param = physicsState.methodParam;
+
+      let deltaV_ms = 0;
+
+      if (method === 'kinetic') {
+        const beta = param;
+        const m_sc = 600.0;
+        const v_rel = 6500.0;
+        deltaV_ms = (beta * m_sc * v_rel) / M;
+      } else if (method === 'laser') {
+        const power_MW = param;
+        const thrust_N = power_MW * 1e6 * 8e-5;
+        const burnTime_sec = Math.min(t_lead_sec * 0.6, 5 * 365.25 * 86400);
+        deltaV_ms = (thrust_N * burnTime_sec) / M;
+      } else if (method === 'gravity') {
+        const sc_tons = param;
+        const m_sc = sc_tons * 1000.0;
+        const hoverDist_m = 150.0;
+        const accel_ms2 = (G_CONST * m_sc) / (hoverDist_m * hoverDist_m);
+        const tugTime_sec = t_lead_sec * 0.85;
+        deltaV_ms = accel_ms2 * tugTime_sec;
+      } else if (method === 'nuclear') {
+        const yield_MT = param;
+        const impulse_Ns = yield_MT * 1.8e10 * Math.pow(M / 8.5e10, 0.35);
+        deltaV_ms = impulse_Ns / M;
+      }
+
+      const deltaV_mms = deltaV_ms * 1000.0;
+      const shift_km = (3.0 * deltaV_ms * t_lead_sec) / 1000.0;
+
+      physicsState.computedDeltaV_mms = deltaV_mms;
+      physicsState.computedShift_km = shift_km;
+    }
+
+    function onDeflectionChange(fromMethodDropdown = false) {
+      const methodSelect = document.getElementById('deflection-method');
+      const method = methodSelect.value;
+      const leadTime = parseFloat(document.getElementById('slider-leadtime').value);
+      const paramSlider = document.getElementById('slider-method-param');
+
+      if (fromMethodDropdown) {
+        if (method === 'kinetic') {
+          paramSlider.min = 1.0; paramSlider.max = 5.0; paramSlider.step = 0.1; paramSlider.value = 3.6;
+        } else if (method === 'laser') {
+          paramSlider.min = 5; paramSlider.max = 50; paramSlider.step = 1; paramSlider.value = 25;
+        } else if (method === 'gravity') {
+          paramSlider.min = 5; paramSlider.max = 50; paramSlider.step = 1; paramSlider.value = 20;
+        } else if (method === 'nuclear') {
+          paramSlider.min = 0.1; paramSlider.max = 2.0; paramSlider.step = 0.1; paramSlider.value = 1.0;
+        }
+      }
+
+      physicsState.deflectionMethod = method;
+      physicsState.leadTimeYears = leadTime;
+      physicsState.methodParam = parseFloat(paramSlider.value);
+
+      const ltLabel = leadTime < 0.25
+        ? `${Math.round(leadTime * 365.25)} Days`
+        : `${leadTime.toFixed(1)} Years`;
+      document.getElementById('val-leadtime').textContent = ltLabel;
+
+      const controls = document.getElementById('deflection-controls');
+      const warnBox = document.getElementById('nuclear-warning-box');
+      const paramLabel = document.getElementById('method-param-label');
+      const paramVal = document.getElementById('val-method-param');
+      const formulaNote = document.getElementById('method-formula-note');
+
+      if (method === 'none') {
+        controls.classList.add('hidden');
+        warnBox.classList.add('hidden');
+        physicsState.deflectionTriggered = false;
+      } else {
+        controls.classList.remove('hidden');
+        warnBox.classList.toggle('hidden', method !== 'nuclear');
+
+        if (method === 'kinetic') {
+          paramLabel.textContent = 'Momentum Enhancement (β):';
+          paramVal.textContent = `β = ${physicsState.methodParam.toFixed(1)}`;
+          formulaNote.textContent = 'Δv = β · m_sc · v_rel / M';
+        } else if (method === 'laser') {
+          paramLabel.textContent = 'Laser Array Power (P):';
+          paramVal.textContent = `${physicsState.methodParam.toFixed(0)} MW`;
+          formulaNote.textContent = 'Continuous ablation thrust F · t_burn / M';
+        } else if (method === 'gravity') {
+          paramLabel.textContent = 'Tractor Spacecraft Mass:';
+          paramVal.textContent = `${physicsState.methodParam.toFixed(0)} Tons`;
+          formulaNote.textContent = 'a = G·m_sc/d²';
+        } else if (method === 'nuclear') {
+          paramLabel.textContent = 'Standoff Device Yield:';
+          paramVal.textContent = `${physicsState.methodParam.toFixed(1)} MT`;
+          formulaNote.textContent = 'High-impulse X-ray ablation';
+        }
+      }
+
+      computeDeflectionPhysics();
+      const dvDisplay = physicsState.computedDeltaV_mms >= 1000
+        ? `${(physicsState.computedDeltaV_mms / 1000).toFixed(2)} m/s`
+        : `${physicsState.computedDeltaV_mms.toFixed(2)} mm/s`;
+      document.getElementById('val-computed-dv').textContent = `${dvDisplay} (Δx ≈ ${Math.round(physicsState.computedShift_km).toLocaleString('en-US')} km)`;
+
+      if (!physicsState.running) {
+        predictTrajectoryLine();
+      }
+      evaluateActiveMissionProgress();
+    }
+
+    document.getElementById('deflection-method').onchange = function () {
+      onDeflectionChange(true);
+    };
+
+    function launchDeflectionMission() {
+      if (physicsState.deflectionMethod === 'none') return;
+      physicsState.deflectionTriggered = true;
+      physicsState.deflectionProgress = 0;
+
+      const requiredShift_km = 8200.0;
+      const deflectionRatio = physicsState.computedShift_km / requiredShift_km;
+      const scenePerpDeltaV = Math.min(3.5, deflectionRatio * 0.56);
+
+      const perp = new THREE.Vector3(-physicsState.vel.z, physicsState.vel.y * 0.4, physicsState.vel.x).normalize();
+      physicsState.vel.addScaledVector(perp, scenePerpDeltaV);
+
+      triggerDeflectionVisuals();
+      predictTrajectoryLine();
+
+      const btn = document.getElementById('btn-launch-defense');
+      btn.textContent = '✅ Deflection Burn Executed';
+      btn.classList.replace('bg-emerald-600', 'bg-teal-700');
+
+      if (!physicsState.running && !physicsState.ended) {
+        toggleSimulation();
+      }
+    }
+
+    // =========================================================================
+    // 5. THREE.JS RENDERING SCENE
+    // =========================================================================
+    let scene, camera, renderer, controls;
+    let earthGroup, earthMesh, cloudsMesh, atmoMesh, sunLight, sunSprite;
+    let asteroidGroup, asteroidMesh, plasmaTrailMesh, velocityArrow, accelArrow;
+    let trajectoryLine, closestApproachMarker;
+    let interceptorMesh, laserBeamMesh;
+    let shockwaveRings = [];
+    let debrisParticles = [];
+    let impactCraters = [];
+    let cameraMode = 'overview';
+    let screenShake = 0;
+
+    function createHighDetailEarthTextures() {
+      const width = 2048, height = 1024;
+      const dayCanvas = document.createElement('canvas');
+      dayCanvas.width = width; dayCanvas.height = height;
+      const dCtx = dayCanvas.getContext('2d');
+
+      const nightCanvas = document.createElement('canvas');
+      nightCanvas.width = width; nightCanvas.height = height;
+      const nCtx = nightCanvas.getContext('2d');
+
+      const cloudCanvas = document.createElement('canvas');
+      cloudCanvas.width = width; cloudCanvas.height = height;
+      const cCtx = cloudCanvas.getContext('2d');
+
+      const oceanGrad = dCtx.createLinearGradient(0, 0, 0, height);
+      oceanGrad.addColorStop(0, '#040d1a');
+      oceanGrad.addColorStop(0.3, '#0b192c');
+      oceanGrad.addColorStop(0.7, '#0b192c');
+      oceanGrad.addColorStop(1, '#020617');
+      dCtx.fillStyle = oceanGrad;
+      dCtx.fillRect(0, 0, width, height);
+
+      nCtx.fillStyle = '#010309';
+      nCtx.fillRect(0, 0, width, height);
+
+      function seedRand(seed) {
+        const x = Math.sin(seed++) * 10000;
+        return x - Math.floor(x);
+      }
+
+      CONTINENT_REGIONS.forEach((cont, cIdx) => {
+        cont.boxes.forEach((box, bIdx) => {
+          const x1 = ((box.minLon + 180) / 360) * width;
+          const x2 = ((box.maxLon + 180) / 360) * width;
+          const y1 = ((90 - box.maxLat) / 180) * height;
+          const y2 = ((90 - box.minLat) / 180) * height;
+
+          const cx = (x1 + x2) * 0.5;
+          const cy = (y1 + y2) * 0.5;
+          const rx = (x2 - x1) * 0.5;
+          const ry = (y2 - y1) * 0.5;
+
+          const steps = 42;
+          for (let i = 0; i < steps; i++) {
+            const ang = (i / steps) * Math.PI * 2;
+            const rMult = 0.55 + 0.35 * seedRand(cIdx * 31 + bIdx * 17 + i * 3.1);
+            const bx = cx + Math.cos(ang) * rx * rMult;
+            const by = cy + Math.sin(ang) * ry * rMult;
+            const rad = Math.max(22, Math.min(rx, ry) * 0.68);
+
+            const grad = dCtx.createRadialGradient(bx, by, rad * 0.1, bx, by, rad);
+            if (cont.name === 'Antarctica' || cont.name === 'Greenland') {
+              grad.addColorStop(0, '#f8fafc');
+              grad.addColorStop(0.75, '#cbd5e1');
+              grad.addColorStop(1, 'rgba(203, 213, 225, 0)');
+            } else if (cont.name === 'Africa' || cont.name === 'Australia & Oceania') {
+              grad.addColorStop(0, '#d4a373');
+              grad.addColorStop(0.6, '#9b7b48');
+              grad.addColorStop(0.9, '#386641');
+              grad.addColorStop(1, 'rgba(56, 102, 65, 0)');
+            } else {
+              grad.addColorStop(0, '#2d6a4f');
+              grad.addColorStop(0.6, '#40916c');
+              grad.addColorStop(0.9, '#52b788');
+              grad.addColorStop(1, 'rgba(82, 183, 136, 0)');
+            }
+
+            dCtx.fillStyle = grad;
+            dCtx.beginPath();
+            dCtx.arc(bx, by, rad, 0, Math.PI * 2);
+            dCtx.fill();
+          }
+        });
+      });
+
+      cCtx.clearRect(0, 0, width, height);
+      for (let i = 0; i < 550; i++) {
+        const cx = seedRand(i * 1.7) * width;
+        const cy = seedRand(i * 2.9) * height;
+        const rx = 50 + seedRand(i * 4.3) * 150;
+        const ry = 18 + seedRand(i * 5.1) * 42;
+        const cGrad = cCtx.createRadialGradient(cx, cy, 4, cx, cy, rx);
+        cGrad.addColorStop(0, 'rgba(255, 255, 255, 0.45)');
+        cGrad.addColorStop(0.65, 'rgba(241, 245, 249, 0.18)');
+        cGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        cCtx.fillStyle = cGrad;
+        cCtx.beginPath();
+        cCtx.ellipse(cx, cy, rx, ry, (seedRand(i) - 0.5) * 0.4, 0, Math.PI * 2);
+        cCtx.fill();
+      }
+
+      return {
+        dayTex: new THREE.CanvasTexture(dayCanvas),
+        nightTex: new THREE.CanvasTexture(nightCanvas),
+        cloudTex: new THREE.CanvasTexture(cloudCanvas)
+      };
+    }
+
+    function createPermanentSurfaceCrater(worldImpactPos, isAirburst) {
+      const craterGroup = new THREE.Group();
+      const localImpactPos = earthMesh.worldToLocal(worldImpactPos.clone());
+      const normal = localImpactPos.clone().normalize();
+
+      const physicalRadiusUnits = physicsState.crater_km / KM_PER_UNIT;
+      const visualRadius = isAirburst
+        ? Math.max(0.45, Math.min(2.8, (physicsState.airblast_km / KM_PER_UNIT) * 1.4))
+        : Math.max(0.38, Math.min(4.2, physicalRadiusUnits * 2.2 + Math.log10(Math.max(1, physicsState.kineticEnergy_MT)) * 0.25));
+
+      const scarCanvas = document.createElement('canvas');
+      scarCanvas.width = 256; scarCanvas.height = 256;
+      const sCtx = scarCanvas.getContext('2d');
+      const grad = sCtx.createRadialGradient(128, 128, 6, 128, 128, 128);
+      if (isAirburst) {
+        grad.addColorStop(0, 'rgba(251, 146, 60, 0.8)');
+        grad.addColorStop(0.35, 'rgba(30, 27, 24, 0.9)');
+        grad.addColorStop(0.75, 'rgba(15, 23, 42, 0.5)');
+        grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      } else {
+        grad.addColorStop(0, 'rgba(255, 245, 200, 1.0)');
+        grad.addColorStop(0.2, 'rgba(239, 68, 68, 0.98)');
+        grad.addColorStop(0.4, 'rgba(28, 25, 23, 0.98)');
+        grad.addColorStop(0.7, 'rgba(78, 70, 62, 0.7)');
+        grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      }
+      sCtx.fillStyle = grad;
+      sCtx.fillRect(0, 0, 256, 256);
+
+      const scarTex = new THREE.CanvasTexture(scarCanvas);
+      const scarGeo = new THREE.CircleGeometry(visualRadius * 2.2, 48);
+      const scarMat = new THREE.MeshBasicMaterial({
+        map: scarTex,
+        transparent: true,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -2
+      });
+      craterGroup.add(new THREE.Mesh(scarGeo, scarMat));
+
+      let lavaCoreMesh = null;
+      if (!isAirburst) {
+        const rimGeo = new THREE.TorusGeometry(visualRadius * 0.78, visualRadius * 0.16, 12, 36);
+        const rimMat = new THREE.MeshStandardMaterial({
+          color: 0x292524,
+          roughness: 0.95,
+          emissive: 0x9a3412,
+          emissiveIntensity: 0.8
+        });
+        craterGroup.add(new THREE.Mesh(rimGeo, rimMat));
+
+        const lavaGeo = new THREE.CircleGeometry(visualRadius * 0.68, 32);
+        const lavaMat = new THREE.MeshBasicMaterial({
+          color: 0xff4500,
+          transparent: true,
+          opacity: 0.95,
+          polygonOffset: true,
+          polygonOffsetFactor: -3
+        });
+        lavaCoreMesh = new THREE.Mesh(lavaGeo, lavaMat);
+        craterGroup.add(lavaCoreMesh);
+      }
+
+      craterGroup.position.copy(normal).multiplyScalar(SCENE_EARTH_RADIUS * 1.004);
+      craterGroup.lookAt(normal.clone().multiplyScalar(SCENE_EARTH_RADIUS * 2));
+
+      earthMesh.add(craterGroup);
+      impactCraters.push({ group: craterGroup, lavaMesh: lavaCoreMesh, age: 0 });
+    }
+
+    function initThreeScene() {
+      const container = document.getElementById('canvas-container');
+      scene = new THREE.Scene();
+
+      camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 2000);
+      camera.position.set(16, 18, 42);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.2;
+      container.appendChild(renderer.domElement);
+
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.06;
+      controls.minDistance = 13;
+      controls.maxDistance = 180;
+
+      const starGeo = new THREE.BufferGeometry();
+      const starCount = 5000;
+      const starPos = new Float32Array(starCount * 3);
+      const starColors = new Float32Array(starCount * 3);
+      for (let i = 0; i < starCount; i++) {
+        const r = 400 + Math.random() * 600;
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+        starPos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+        starPos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+        starPos[i * 3 + 2] = r * Math.cos(phi);
+
+        const tint = Math.random();
+        if (tint > 0.75) { starColors[i*3]=0.7; starColors[i*3+1]=0.85; starColors[i*3+2]=1.0; }
+        else if (tint > 0.5) { starColors[i*3]=1.0; starColors[i*3+1]=0.9; starColors[i*3+2]=0.7; }
+        else { starColors[i*3]=0.95; starColors[i*3+1]=0.97; starColors[i*3+2]=1.0; }
+      }
+      starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+      starGeo.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
+      scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ size: 1.2, vertexColors: true, transparent: true, opacity: 0.92 })));
+
+      const sunDir = new THREE.Vector3(-90, 40, 60);
+      sunLight = new THREE.DirectionalLight(0xfffaed, 2.4);
+      sunLight.position.copy(sunDir);
+      scene.add(sunLight);
+      scene.add(new THREE.AmbientLight(0x1e293b, 0.6));
+
+      const sunCanvas = document.createElement('canvas');
+      sunCanvas.width = 256; sunCanvas.height = 256;
+      const sCtx = sunCanvas.getContext('2d');
+      const sGrad = sCtx.createRadialGradient(128, 128, 4, 128, 128, 128);
+      sGrad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+      sGrad.addColorStop(0.15, 'rgba(255, 235, 175, 0.95)');
+      sGrad.addColorStop(0.4, 'rgba(251, 146, 60, 0.35)');
+      sGrad.addColorStop(1, 'rgba(251, 146, 60, 0)');
+      sCtx.fillStyle = sGrad;
+      sCtx.fillRect(0, 0, 256, 256);
+
+      sunSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: new THREE.CanvasTexture(sunCanvas),
+        blending: THREE.AdditiveBlending,
+        transparent: true
+      }));
+      sunSprite.position.copy(sunDir).multiplyScalar(2.5);
+      sunSprite.scale.set(70, 70, 1);
+      scene.add(sunSprite);
+
+      earthGroup = new THREE.Group();
+      scene.add(earthGroup);
+
+      const { dayTex, nightTex, cloudTex } = createHighDetailEarthTextures();
+
+      const earthShaderMat = new THREE.ShaderMaterial({
+        uniforms: {
+          dayTexture: { value: dayTex },
+          nightTexture: { value: nightTex },
+          sunDirection: { value: sunDir.clone().normalize() }
+        },
+        vertexShader: `
+          varying vec2 vUv;
+          varying vec3 vNormalWorld;
+          void main() {
+            vUv = uv;
+            vNormalWorld = normalize(mat3(modelMatrix) * normal);
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform sampler2D dayTexture;
+          uniform sampler2D nightTexture;
+          uniform vec3 sunDirection;
+          varying vec2 vUv;
+          varying vec3 vNormalWorld;
+          void main() {
+            float intensity = dot(normalize(vNormalWorld), sunDirection);
+            float dayMix = smoothstep(-0.2, 0.25, intensity);
+            vec3 dayColor = texture2D(dayTexture, vUv).rgb * (0.28 + max(0.0, intensity) * 1.2);
+            vec3 nightColor = texture2D(nightTexture, vUv).rgb * 1.8;
+            vec3 finalColor = mix(nightColor, dayColor, dayMix);
+            gl_FragColor = vec4(finalColor, 1.0);
+          }
+        `
+      });
+
+      earthMesh = new THREE.Mesh(new THREE.SphereGeometry(SCENE_EARTH_RADIUS, 96, 96), earthShaderMat);
+      earthGroup.add(earthMesh);
+
+      cloudsMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(SCENE_EARTH_RADIUS * 1.014, 96, 96),
+        new THREE.MeshPhongMaterial({ map: cloudTex, transparent: true, opacity: 0.78, depthWrite: false })
+      );
+      earthGroup.add(cloudsMesh);
+
+      atmoMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(SCENE_EARTH_RADIUS * 1.065, 96, 96),
+        new THREE.ShaderMaterial({
+          transparent: true,
+          blending: THREE.AdditiveBlending,
+          side: THREE.BackSide,
+          depthWrite: false,
+          uniforms: { sunDirection: { value: sunDir.clone().normalize() } },
+          vertexShader: `
+            varying vec3 vNormal;
+            varying vec3 vWorldNormal;
+            void main() {
+              vNormal = normalize(normalMatrix * normal);
+              vWorldNormal = normalize(mat3(modelMatrix) * normal);
+              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+          `,
+          fragmentShader: `
+            uniform vec3 sunDirection;
+            varying vec3 vNormal;
+            varying vec3 vWorldNormal;
+            void main() {
+              float viewDot = dot(vNormal, vec3(0.0, 0.0, 1.0));
+              float rim = pow(0.7 - viewDot, 3.0);
+              float sunFactor = smoothstep(-0.4, 0.8, dot(vWorldNormal, sunDirection));
+              vec3 glowColor = mix(vec3(0.1, 0.3, 0.65), vec3(0.3, 0.75, 1.0), sunFactor);
+              gl_FragColor = vec4(glowColor, clamp(rim * 1.5, 0.0, 0.9));
+            }
+          `
+        })
+      );
+      earthGroup.add(atmoMesh);
+
+      asteroidGroup = new THREE.Group();
+      scene.add(asteroidGroup);
+
+      const astGeo = new THREE.IcosahedronGeometry(1.0, 3);
+      const posAttr = astGeo.attributes.position;
+      const vTmp = new THREE.Vector3();
+      for (let i = 0; i < posAttr.count; i++) {
+        vTmp.fromBufferAttribute(posAttr, i);
+        const n1 = Math.sin(vTmp.x * 3.5) * Math.cos(vTmp.y * 3.5) * Math.sin(vTmp.z * 3.5);
+        const n2 = Math.cos(vTmp.x * 8.0 + vTmp.y * 6.0) * 0.08;
+        vTmp.multiplyScalar(1.0 + n1 * 0.25 + n2);
+        posAttr.setXYZ(i, vTmp.x, vTmp.y, vTmp.z);
+      }
+      astGeo.computeVertexNormals();
+
+      asteroidMesh = new THREE.Mesh(
+        astGeo,
+        new THREE.MeshStandardMaterial({
+          color: 0x7c746b,
+          roughness: 0.88,
+          metalness: 0.22,
+          emissive: 0xff4500,
+          emissiveIntensity: 0.0
+        })
+      );
+      asteroidGroup.add(asteroidMesh);
+
+      const plasmaGeo = new THREE.ConeGeometry(1.45, 5.5, 24, 1, true);
+      plasmaGeo.rotateX(Math.PI / 2);
+      plasmaTrailMesh = new THREE.Mesh(
+        plasmaGeo,
+        new THREE.MeshBasicMaterial({
+          color: 0xff6b00,
+          transparent: true,
+          opacity: 0.0,
+          blending: THREE.AdditiveBlending,
+          side: THREE.DoubleSide,
+          depthWrite: false
+        })
+      );
+      asteroidGroup.add(plasmaTrailMesh);
+
+      velocityArrow = new THREE.ArrowHelper(new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 0, 0), 4.5, 0x38bdf8, 0.9, 0.5);
+      accelArrow = new THREE.ArrowHelper(new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 0, 0), 2.5, 0xf59e0b, 0.7, 0.4);
+      scene.add(velocityArrow);
+      scene.add(accelArrow);
+
+      trajectoryLine = new THREE.Line(
+        new THREE.BufferGeometry(),
+        new THREE.LineBasicMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.85 })
+      );
+      scene.add(trajectoryLine);
+
+      closestApproachMarker = new THREE.Mesh(
+        new THREE.RingGeometry(0.35, 0.55, 32),
+        new THREE.MeshBasicMaterial({ color: 0xef4444, side: THREE.DoubleSide, transparent: true, opacity: 0.9 })
+      );
+      scene.add(closestApproachMarker);
+
+      interceptorMesh = new THREE.Mesh(
+        new THREE.ConeGeometry(0.35, 1.1, 8),
+        new THREE.MeshStandardMaterial({ color: 0x10b981, emissive: 0x059669, emissiveIntensity: 0.8 })
+      );
+      interceptorMesh.visible = false;
+      scene.add(interceptorMesh);
+
+      laserBeamMesh = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
+        new THREE.LineBasicMaterial({ color: 0x10b981, linewidth: 3 })
+      );
+      laserBeamMesh.visible = false;
+      scene.add(laserBeamMesh);
+
+      window.addEventListener('resize', onWindowResize);
+    }
+
+    function updateAsteroidVisualScale() {
+      if (!asteroidMesh) return;
+      const visualScale = Math.max(0.32, Math.min(2.4, 0.25 + Math.pow(physicsState.diameter / 350, 0.45) * 0.55));
+      asteroidMesh.scale.setScalar(visualScale);
+      plasmaTrailMesh.scale.setScalar(visualScale * 1.15);
+
+      if (physicsState.density < 1500) asteroidMesh.material.color.setHex(0x94a3b8);
+      else if (physicsState.density < 2600) asteroidMesh.material.color.setHex(0x475569);
+      else if (physicsState.density < 5000) asteroidMesh.material.color.setHex(0x8c7b6b);
+      else asteroidMesh.material.color.setHex(0xb49a78);
+    }
+
+    // =========================================================================
+    // 6. ORBITAL MECHANICS & TTI
+    // =========================================================================
+    function initializeTrajectoryVectors() {
+      const startDistUnits = SCENE_EARTH_RADIUS + START_ALTITUDE_UNITS;
+      const dirNorm = new THREE.Vector3(0.78, 0.46, 0.28).normalize();
+      const startPos = dirNorm.multiplyScalar(startDistUnits);
+      physicsState.pos.copy(startPos);
+
+      const angleRad = (physicsState.entryAngleDeg * Math.PI) / 180;
+      const impactParamUnits = SCENE_EARTH_RADIUS * Math.cos(angleRad) * 0.85;
+
+      const toEarth = new THREE.Vector3(0, 0, 0).sub(startPos).normalize();
+      const sideVec = new THREE.Vector3(0, 1, 0).cross(toEarth).normalize();
+      const targetPoint = sideVec.multiplyScalar(impactParamUnits);
+
+      const dir = targetPoint.sub(startPos).normalize();
+      const sceneSpeed = (physicsState.v0_kms / 18.5) * BASE_SCENE_SPEED_AT_18_5;
+      physicsState.vel.copy(dir).multiplyScalar(sceneSpeed);
+
+      if (asteroidGroup) {
+        asteroidGroup.position.copy(physicsState.pos);
+        updateVectorsAndTelemetry(0);
+        predictTrajectoryLine();
+      }
+    }
+
+    function predictTrajectoryLine() {
+      if (!trajectoryLine) return;
+      const simPos = physicsState.pos.clone();
+      const simVel = physicsState.vel.clone();
+      const points = [simPos.clone()];
+
+      const muScene = 185.0;
+      const dtStep = 0.08;
+      let hitEarth = false;
+      let minR = Infinity;
+      let closestPt = simPos.clone();
+
+      for (let i = 0; i < 450; i++) {
+        const r = simPos.length();
+        if (r < minR) {
+          minR = r;
+          closestPt.copy(simPos);
+        }
+        if (r <= SCENE_EARTH_RADIUS) {
+          hitEarth = true;
+          closestPt.copy(simPos).normalize().multiplyScalar(SCENE_EARTH_RADIUS * 1.005);
+          points.push(closestPt.clone());
+          break;
+        }
+        if (r > 130) break;
+
+        const acc = simPos.clone().multiplyScalar(-muScene / Math.pow(r, 3));
+        simVel.addScaledVector(acc, dtStep);
+        simPos.addScaledVector(simVel, dtStep);
+        points.push(simPos.clone());
+      }
+
+      trajectoryLine.geometry.setFromPoints(points);
+      if (hitEarth) {
+        trajectoryLine.material.color.setHex(0xf59e0b);
+        closestApproachMarker.position.copy(closestPt);
+        closestApproachMarker.lookAt(0, 0, 0);
+        closestApproachMarker.material.color.setHex(0xef4444);
+        closestApproachMarker.visible = true;
+
+        if (!physicsState.ended) {
+          const geoPred = getGeographicLocationFromWorldPoint(closestPt);
+          document.getElementById('eff-region').textContent = geoPred.region;
+          document.getElementById('eff-coords').textContent = `${geoPred.latStr}, ${geoPred.lonStr}`;
+        }
+      } else {
+        trajectoryLine.material.color.setHex(0x10b981);
+        closestApproachMarker.position.copy(closestPt);
+        closestApproachMarker.material.color.setHex(0x10b981);
+        closestApproachMarker.visible = true;
+        if (!physicsState.ended) {
+          document.getElementById('eff-region').textContent = 'Safe Orbital Flyby';
+          document.getElementById('eff-coords').textContent = 'No Surface Impact';
+        }
+      }
+    }
+
+    function updateVectorsAndTelemetry(dt) {
+      const rUnits = physicsState.pos.length();
+      const altitudeUnits = Math.max(0, rUnits - SCENE_EARTH_RADIUS);
+      const altitude_km = altitudeUnits * KM_PER_UNIT;
+      const r_meters = (EARTH_RADIUS_KM + altitude_km) * 1000.0;
+
+      const g_ms2 = (G_CONST * EARTH_MASS) / (r_meters * r_meters);
+      const force_N = physicsState.mass_kg * g_ms2;
+
+      const sceneSpeed = physicsState.vel.length();
+      const instSpeed_kms = (sceneSpeed / BASE_SCENE_SPEED_AT_18_5) * 18.5;
+
+      let dynPressure_kPa = 0;
+      if (altitude_km < ATMO_HEIGHT_KM) {
+        const airDensity = 1.225 * Math.exp(-altitude_km / 8.5);
+        const v_ms = instSpeed_kms * 1000.0;
+        dynPressure_kPa = (0.5 * airDensity * v_ms * v_ms) / 1000.0;
+
+        const heatRatio = Math.min(1.0, (ATMO_HEIGHT_KM - altitude_km) / ATMO_HEIGHT_KM);
+        asteroidMesh.material.emissiveIntensity = heatRatio * 2.4;
+        plasmaTrailMesh.material.opacity = heatRatio * 0.85;
+        plasmaTrailMesh.lookAt(physicsState.pos.clone().add(physicsState.vel));
+      } else {
+        asteroidMesh.material.emissiveIntensity = 0;
+        plasmaTrailMesh.material.opacity = 0;
+      }
+
+      physicsState.altitude_km = altitude_km;
+      physicsState.instSpeed_kms = instSpeed_kms;
+      physicsState.instAccel_ms2 = g_ms2;
+      physicsState.gravForce_N = force_N;
+      physicsState.dynamicPressure_kPa = dynPressure_kPa;
+
+      if (velocityArrow && accelArrow && !physicsState.ended) {
+        velocityArrow.position.copy(physicsState.pos);
+        velocityArrow.setDirection(physicsState.vel.clone().normalize());
+        velocityArrow.setLength(Math.min(7, 2.5 + instSpeed_kms * 0.08), 0.8, 0.45);
+
+        const gravDir = physicsState.pos.clone().negate().normalize();
+        accelArrow.position.copy(physicsState.pos);
+        accelArrow.setDirection(gravDir);
+        accelArrow.setLength(Math.min(6, 1.4 + g_ms2 * 0.45), 0.7, 0.4);
+      }
+
+      if (dt > 0) {
+        physicsState.historyV.push(instSpeed_kms);
+        physicsState.historyA.push(g_ms2);
+        if (physicsState.historyV.length > 70) {
+          physicsState.historyV.shift();
+          physicsState.historyA.shift();
+        }
+      }
+
+      updateLiveTelemetryUI();
+    }
+
+    function updateLiveTelemetryUI() {
+      document.getElementById('tel-distance').textContent = `${Math.round(physicsState.altitude_km).toLocaleString('en-US')} km`;
+      document.getElementById('tel-velocity').textContent = `${physicsState.instSpeed_kms.toFixed(2)} km/s`;
+      document.getElementById('tel-accel').textContent = `${physicsState.instAccel_ms2.toFixed(2)} m/s²`;
+      document.getElementById('tel-force').textContent = formatScientific(physicsState.gravForce_N, 'N');
+      document.getElementById('tel-pressure').textContent = physicsState.dynamicPressure_kPa > 0.01
+        ? `${physicsState.dynamicPressure_kPa.toFixed(1)} kPa`
+        : '0.00 kPa';
+
+      document.getElementById('bar-velocity').style.width = `${Math.min(100, (physicsState.instSpeed_kms / 75) * 100)}%`;
+      document.getElementById('bar-accel').style.width = `${Math.min(100, (physicsState.instAccel_ms2 / 9.81) * 100)}%`;
+
+      const altitudeUnits = Math.max(0, physicsState.pos.length() - SCENE_EARTH_RADIUS);
+      const radialSpeedUnits = Math.max(0.05, -physicsState.pos.clone().normalize().dot(physicsState.vel));
+      const simSecondsRemaining = altitudeUnits / radialSpeedUnits;
+      const realSecondsRemaining = simSecondsRemaining * getTimeCompressionFactor();
+
+      const ttiEl = document.getElementById('tel-tti');
+      if (physicsState.outcome === 'deflected') {
+        ttiEl.textContent = 'DEFLECTED ✓';
+        ttiEl.className = 'font-mono-tech font-bold text-sm text-emerald-400';
+      } else if (physicsState.ended) {
+        ttiEl.textContent = '00m 00s';
+        ttiEl.className = 'font-mono-tech font-bold text-sm text-red-400';
+      } else {
+        const mins = Math.floor(realSecondsRemaining / 60);
+        const secs = Math.floor(realSecondsRemaining % 60);
+        ttiEl.textContent = `${String(mins).padStart(2, '0')}m ${String(secs).padStart(2, '0')}s (${physicsState.timeScale}x)`;
+        ttiEl.className = 'font-mono-tech font-bold text-sm text-amber-400';
+      }
+
+      drawTelemetryChart();
+    }
+
+    function drawTelemetryChart() {
+      const canvas = document.getElementById('telemetry-chart');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width, h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.12)';
+      ctx.lineWidth = 1;
+      for (let y = 18; y < h; y += 22) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+      }
+
+      const len = physicsState.historyV.length;
+      if (len < 2) return;
+
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i < len; i++) {
+        const x = (i / 69) * w;
+        const normV = Math.min(1, Math.max(0, (physicsState.historyV[i] - 10) / 65));
+        const y = h - 8 - normV * (h - 16);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i < len; i++) {
+        const x = (i / 69) * w;
+        const normA = Math.min(1, Math.max(0, physicsState.historyA[i] / 9.81));
+        const y = h - 8 - normA * (h - 16);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    // =========================================================================
+    // 7. IMPACT EFFECTS & BADGES
+    // =========================================================================
+    function unlockBadge(badgeKey) {
+      if (!physicsState.badges[badgeKey]) {
+        physicsState.badges[badgeKey] = true;
+      }
+      updateCadetRankHUD();
+    }
+
+    function updateCadetRankHUD() {
+      const b = physicsState.badges;
+      const keys = ['rookie', 'physicist', 'hero', 'strategist', 'atmospheric', 'commander'];
+      let unlockedCount = 0;
+      keys.forEach(k => {
+        const el = document.getElementById(`b-${k}`);
+        if (b[k]) {
+          unlockedCount++;
+          if (el) el.style.opacity = '1';
+        } else if (el) {
+          el.style.opacity = '0.45';
+        }
+      });
+
+      const badgeText = document.getElementById('cadet-rank-badge-text');
+      const modalRank = document.getElementById('modal-cadet-rank');
+      const badgeIcon = document.getElementById('badge-icon-display');
+
+      let rankLabel = `Rookie (${unlockedCount}/6)`;
+      let fullRankTitle = 'Rookie Space Cadet 🌱';
+      let icon = '🌱';
+
+      if (unlockedCount >= 6) {
+        rankLabel = `Commander (${unlockedCount}/6)`;
+        fullRankTitle = 'AEGIS Flight Commander 👑';
+        icon = '👑';
+      } else if (unlockedCount >= 4) {
+        rankLabel = `Specialist (${unlockedCount}/6)`;
+        fullRankTitle = 'Senior Defense Specialist 🚀';
+        icon = '🚀';
+      } else if (unlockedCount >= 2) {
+        rankLabel = `Cadet (${unlockedCount}/6)`;
+        fullRankTitle = 'Junior Orbital Analyst ⭐';
+        icon = '⭐';
+      }
+
+      if (badgeText) badgeText.textContent = rankLabel;
+      if (modalRank) modalRank.textContent = fullRankTitle;
+      if (badgeIcon) badgeIcon.textContent = icon;
+    }
+
+    function triggerImpactEffects(impactPos, isAirburst) {
+      physicsState.ended = true;
+      physicsState.running = false;
+      physicsState.outcome = isAirburst ? 'airburst' : 'impact';
+      screenShake = isAirburst ? 0.55 : 1.1;
+
+      updateSimButtonUI();
+      velocityArrow.visible = false;
+      accelArrow.visible = false;
+
+      const geoData = getGeographicLocationFromWorldPoint(impactPos);
+      physicsState.lastImpactGeo = geoData;
+      document.getElementById('eff-region').textContent = geoData.region;
+      document.getElementById('eff-coords').textContent = `${geoData.latStr}, ${geoData.lonStr}`;
+
+      createPermanentSurfaceCrater(impactPos, isAirburst);
+
+      const badge = document.getElementById('status-badge');
+      badge.textContent = isAirburst ? 'AIRBURST EVENT' : 'IMPACT CONFIRMED';
+
+      const normal = impactPos.clone().normalize();
+      for (let i = 0; i < 3; i++) {
+        const ringGeo = new THREE.RingGeometry(0.1, 0.35, 48);
+        const ringMat = new THREE.MeshBasicMaterial({
+          color: i === 0 ? 0xffffff : (isAirburst ? 0xfbbf24 : 0xf97316),
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.95,
+          blending: THREE.AdditiveBlending
+        });
+        const ring = new THREE.Mesh(ringGeo, ringMat);
+        ring.position.copy(normal).multiplyScalar(SCENE_EARTH_RADIUS * (isAirburst ? 1.03 : 1.015));
+        ring.lookAt(normal.clone().multiplyScalar(SCENE_EARTH_RADIUS * 2));
+        scene.add(ring);
+        shockwaveRings.push({ mesh: ring, speed: 4.5 + i * 2.2, maxScale: 16 + i * 5, life: 1.0 });
+      }
+
+      for (let i = 0; i < 90; i++) {
+        const pMesh = new THREE.Mesh(
+          new THREE.SphereGeometry(0.14, 6, 6),
+          new THREE.MeshBasicMaterial({ color: i % 2 === 0 ? 0xffedd5 : 0xf97316, transparent: true, opacity: 1 })
+        );
+        pMesh.position.copy(impactPos);
+        const randDir = normal.clone().add(new THREE.Vector3((Math.random()-0.5)*1.8, (Math.random()-0.5)*1.8, (Math.random()-0.5)*1.8)).normalize();
+        scene.add(pMesh);
+        debrisParticles.push({ mesh: pMesh, vel: randDir.multiplyScalar(2 + Math.random() * 6), life: 1.0 });
+      }
+
+      asteroidGroup.visible = false;
+
+      const toast = document.getElementById('event-toast');
+      toast.classList.remove('hidden');
+      toast.classList.add('flex');
+      document.getElementById('event-toast-icon').textContent = isAirburst ? '☄️' : '💥';
+      document.getElementById('event-toast-title').textContent = isAirburst
+        ? `Atmospheric Airburst at ${physicsState.breakupAltitude_km.toFixed(1)} km over ${geoData.region}!`
+        : `Surface Impact in ${geoData.region} (${geoData.latStr}, ${geoData.lonStr})`;
+      document.getElementById('event-toast-desc').textContent = isAirburst
+        ? `Disintegrated before ground impact | Shockwave radius: ${physicsState.airblast_km.toFixed(1)} km.`
+        : `Crater: ${physicsState.crater_km.toFixed(2)} km wide | Yield: ${physicsState.kineticEnergy_MT.toFixed(1)} MT.`;
+
+      evaluateActiveMissionProgress();
+    }
+
+    function triggerDeflectionVisuals() {
+      interceptorMesh.visible = true;
+      interceptorMesh.position.copy(physicsState.pos).add(new THREE.Vector3(-2.5, 1.5, 2.0));
+      interceptorMesh.lookAt(physicsState.pos);
+      laserBeamMesh.visible = (physicsState.deflectionMethod === 'laser');
+    }
+
+    let lastFrameTime = performance.now();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const now = performance.now();
+      const rawDt = Math.min(0.05, (now - lastFrameTime) / 1000);
+      lastFrameTime = now;
+
+      if (earthMesh && cloudsMesh) {
+        earthMesh.rotation.y += rawDt * 0.035;
+        cloudsMesh.rotation.y += rawDt * 0.05;
+      }
+
+      for (let i = 0; i < impactCraters.length; i++) {
+        const c = impactCraters[i];
+        c.age += rawDt;
+        if (c.lavaMesh) {
+          c.lavaMesh.material.opacity = 0.75 + Math.sin(c.age * 4.0) * 0.2;
+        }
+      }
+
+      if (asteroidMesh && !physicsState.ended) {
+        asteroidMesh.rotation.x += rawDt * 0.9;
+        asteroidMesh.rotation.y += rawDt * 1.2;
+      }
+
+      if (physicsState.running && !physicsState.ended) {
+        const dt = rawDt * physicsState.timeScale;
+        physicsState.simTime += dt;
+
+        const r = physicsState.pos.length();
+        const muScene = 185.0;
+
+        const acc = physicsState.pos.clone().multiplyScalar(-muScene / Math.pow(r, 3));
+        physicsState.vel.addScaledVector(acc, dt);
+        physicsState.pos.addScaledVector(physicsState.vel, dt);
+        asteroidGroup.position.copy(physicsState.pos);
+
+        if (physicsState.deflectionTriggered) {
+          physicsState.deflectionProgress += rawDt * 1.8;
+          if (physicsState.deflectionProgress < 1.2) {
+            interceptorMesh.position.lerp(physicsState.pos, 0.15);
+            if (laserBeamMesh.visible) {
+              laserBeamMesh.geometry.setFromPoints([interceptorMesh.position, physicsState.pos]);
+            }
+          } else {
+            interceptorMesh.visible = false;
+            laserBeamMesh.visible = false;
+          }
+        }
+
+        updateVectorsAndTelemetry(dt);
+
+        if (physicsState.willAirburst && physicsState.altitude_km <= physicsState.breakupAltitude_km) {
+          triggerImpactEffects(physicsState.pos.clone(), true);
+        } else if (r <= SCENE_EARTH_RADIUS) {
+          const surfacePt = physicsState.pos.clone().normalize().multiplyScalar(SCENE_EARTH_RADIUS);
+          triggerImpactEffects(surfacePt, false);
+        } else if (physicsState.deflectionTriggered && r > 55 && physicsState.pos.dot(physicsState.vel) > 0) {
+          physicsState.outcome = 'deflected';
+          physicsState.ended = true;
+          physicsState.running = false;
+          unlockBadge('hero');
+          updateSimButtonUI();
+          updateLiveTelemetryUI();
+
+          const badge = document.getElementById('status-badge');
+          badge.textContent = 'DEFLECTION SUCCESS';
+          badge.className = 'px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40';
+
+          const toast = document.getElementById('event-toast');
+          toast.classList.remove('hidden');
+          toast.classList.add('flex');
+          document.getElementById('event-toast-icon').textContent = '🛡️';
+          document.getElementById('event-toast-title').textContent = 'DEFLECTION SUCCESS! Planetary Savior Badge Unlocked!';
+          document.getElementById('event-toast-desc').textContent = `Method: ${physicsState.deflectionMethod.toUpperCase()} | Lateral shift: ${Math.round(physicsState.computedShift_km).toLocaleString('en-US')} km.`;
+
+          evaluateActiveMissionProgress();
+        }
+      }
+
+      for (let i = shockwaveRings.length - 1; i >= 0; i--) {
+        const sw = shockwaveRings[i];
+        sw.mesh.scale.addScalar(rawDt * sw.speed);
+        sw.life -= rawDt * 0.45;
+        sw.mesh.material.opacity = Math.max(0, sw.life);
+        if (sw.life <= 0) {
+          scene.remove(sw.mesh);
+          shockwaveRings.splice(i, 1);
+        }
+      }
+
+      for (let i = debrisParticles.length - 1; i >= 0; i--) {
+        const dp = debrisParticles[i];
+        dp.mesh.position.addScaledVector(dp.vel, rawDt);
+        dp.life -= rawDt * 0.7;
+        dp.mesh.material.opacity = Math.max(0, dp.life);
+        if (dp.life <= 0) {
+          scene.remove(dp.mesh);
+          debrisParticles.splice(i, 1);
+        }
+      }
+
+      if (cameraMode === 'asteroid' && asteroidGroup && asteroidGroup.visible) {
+        controls.target.lerp(asteroidGroup.position, 0.1);
+      } else if (cameraMode === 'earth') {
+        if (impactCraters.length > 0) {
+          const latestCraterWorld = new THREE.Vector3();
+          impactCraters[impactCraters.length - 1].group.getWorldPosition(latestCraterWorld);
+          controls.target.lerp(latestCraterWorld, 0.08);
+        } else {
+          controls.target.lerp(closestApproachMarker.position, 0.08);
+        }
+      } else {
+        controls.target.lerp(new THREE.Vector3(0, 0, 0), 0.08);
+      }
+
+      if (screenShake > 0) {
+        camera.position.x += (Math.random() - 0.5) * screenShake;
+        camera.position.y += (Math.random() - 0.5) * screenShake;
+        screenShake *= 0.92;
+        if (screenShake < 0.01) screenShake = 0;
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    // =========================================================================
+    // 8. MISSIONS & QUIZZES
+    // =========================================================================
+    const MISSIONS_DATA = [
+      {
+        id: 1,
+        shortTitle: 'M1: Mass Lab',
+        title: 'Mission 1: Calculate Asteroid Mass (m = ρ · V)',
+        objective: 'Using 99942 Apophis (D = 370 m, r = 185 m, ρ = 3,200 kg/m³), compute the volume V = ⁴⁄₃πr³ and enter the asteroid mass in scientific notation (× 10¹⁰ kg).',
+        hint: 'Hint: r = 185 m → V ≈ 2.65 × 10⁷ m³. Multiply V by ρ = 3,200 kg/m³ to get ~8.49 × 10¹⁰ kg.',
+        badgeReward: null,
+        quiz: {
+          question: 'If two asteroids have the exact same diameter (volume), but one is Iron-Nickel (7,800 kg/m³) and the other is Porous Ice (1,100 kg/m³), which has greater mass?',
+          options: [
+            'The Iron-Nickel asteroid (~7× more massive)',
+            'The Porous Ice asteroid',
+            'Both have identical mass because their diameter is equal'
+          ],
+          correctIndex: 0,
+          explanation: 'Correct! Because m = ρ · V, mass is directly proportional to density ρ when volume V is constant.'
+        }
+      },
+      {
+        id: 2,
+        shortTitle: 'M2: Speed & Ek',
+        title: 'Mission 2: How Does Doubling Velocity Affect Kinetic Energy?',
+        objective: 'Step 1: Record current Kinetic Energy at v₀ = 18.5 km/s. Step 2: Move the Entry Velocity slider to 37.0 km/s (double speed) and observe how Ek = ½mv² changes.',
+        hint: 'Hint: Set Velocity (v₀) slider to 37.0 km/s while keeping Diameter at 370 m.',
+        badgeReward: 'physicist',
+        quiz: {
+          question: 'According to Ek = ½ m v², when you double an asteroid’s velocity (2v), its kinetic energy increases by a factor of:',
+          options: [
+            '2× (Doubles)',
+            '4× (Quadruples, since 2² = 4)',
+            '8× (Octuples)'
+          ],
+          correctIndex: 1,
+          explanation: 'Spot on! Kinetic energy scales with the SQUARE of velocity (v²), so doubling velocity quadruples impact energy!'
+        }
+      },
+      {
+        id: 3,
+        shortTitle: 'M3: Save Apophis',
+        title: 'Mission 3: Deflect 99942 Apophis Using Kinetic Impactor',
+        objective: 'Select preset "99942 Apophis (370m)", choose "Kinetic Impactor (DART Mission)", set Warning Lead Time to at least 10 years, and launch the interceptor to safely deflect Apophis.',
+        hint: 'Hint: Select Apophis preset → Defense: Kinetic Impactor → Lead Time ≥ 10 yrs → β ≥ 3.5 → Launch Interceptor Spacecraft.',
+        badgeReward: 'hero',
+        quiz: {
+          question: 'Why does a tiny velocity push (Δv of a few mm/s) from a Kinetic Impactor prevent an Earth impact if applied 10+ years early?',
+          options: [
+            'Because lateral orbital shift grows over time (Δx ≈ 3 · Δv · t_lead)',
+            'Because space has no gravity',
+            'Because the spacecraft destroys the asteroid into dust'
+          ],
+          correctIndex: 0,
+          explanation: 'Exactly! Even a millimeter-per-second nudge accumulates over millions of seconds (years) into thousands of kilometers of miss distance.'
+        }
+      },
+      {
+        id: 4,
+        shortTitle: 'M4: Short Warning',
+        title: 'Mission 4: Emergency Threat — Short Warning Time!',
+        objective: 'An unknown 650 m Stony Asteroid is detected just 15 days (0.04 years) before impact! Test whether standard non-nuclear deflection can save Earth in 15 days, then make the right crisis decision.',
+        hint: 'Hint: Click "Load Mission 4 Scenario" below, inspect Δx at 15 days, and choose the realistic planetary defense / civil protection decision.',
+        badgeReward: 'strategist',
+        quiz: {
+          question: 'When a large asteroid (650m) is detected only 15 days before impact, why is civil evacuation of the target zone essential alongside emergency response?',
+          options: [
+            'Gravity Tractors and Lasers need years to accumulate Δx; 15 days is too short for slow deflection',
+            'Evacuation is never needed for 650m asteroids',
+            'A Gravity Tractor can move a 650m asteroid in 2 hours'
+          ],
+          correctIndex: 0,
+          explanation: 'Correct! Planetary defense relies on early detection. With only days of warning, civil evacuation and sheltering save lives while only extreme high-impulse options could even be attempted.'
+        }
+      },
+      {
+        id: 5,
+        shortTitle: 'M5: Chelyabinsk',
+        title: 'Mission 5: Chelyabinsk Meteor — Why Did It Explode in Mid-Air?',
+        objective: 'Load the "Chelyabinsk Meteor (20m)" preset and run the simulation to observe an Atmospheric Airburst before the rock reaches the surface.',
+        hint: 'Hint: Select "Chelyabinsk Meteor (20m - Airburst)" from the Mission Scenarios dropdown and press Start Simulation.',
+        badgeReward: 'atmospheric',
+        quiz: {
+          question: 'Why did the 20m Chelyabinsk meteor explode at ~28 km altitude instead of carving a ground crater?',
+          options: [
+            'Aerodynamic ram pressure (½ρ_air·v²) exceeded the rock’s structural tensile strength',
+            'It ran out of fuel in the upper atmosphere',
+            'Earth’s magnetic field repelled it'
+          ],
+          correctIndex: 0,
+          explanation: 'Correct! At hypersonic speeds (~19 km/s), intense atmospheric ram pressure crushes stony meteoroids in mid-air, releasing energy as an airburst shockwave.'
+        }
+      },
+      {
+        id: 6,
+        shortTitle: 'M6: Final Exam',
+        title: 'Mission 6: Final Command Exam — Random NEO Threat',
+        objective: 'Generate a randomized incoming NEO threat, analyze its breakup altitude and mass, and either successfully deflect it OR generate a complete Impact Assessment Report if it is an un-deflectable airburst.',
+        hint: 'Hint: Click "Generate Final Exam NEO", evaluate its trajectory, and either deflect it off-course or generate the Cadet Impact Report.',
+        badgeReward: 'commander',
+        quiz: {
+          question: 'What is the #1 most important factor in real-world NASA Planetary Defense (like NEO Surveyor & DART)?',
+          options: [
+            'Early detection & tracking years in advance so small Δv maneuvers work',
+            'Waiting until the asteroid enters Earth’s clouds',
+            'Using the same deflection method for every object regardless of size'
+          ],
+          correctIndex: 0,
+          explanation: 'Congratulations, Flight Commander! Early detection and accurate orbital characterization are the foundation of NASA’s Planetary Defense Coordination Office.'
+        }
+      }
+    ];
+
+    function openMissionsModal(idx = physicsState.activeMissionIndex) {
+      physicsState.activeMissionIndex = idx;
+      renderMissionsModal();
+      const modal = document.getElementById('missions-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeMissionsModal() {
+      const modal = document.getElementById('missions-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function updateMissionHUDCard() {
+      const m = MISSIONS_DATA[physicsState.activeMissionIndex];
+      const completedCount = physicsState.missionsCompleted.filter(Boolean).length;
+      document.getElementById('mission-header-badge').textContent = `Mission ${m.id}/6 (${completedCount}✓)`;
+      document.getElementById('hud-mission-title').textContent = `${m.title} ${physicsState.missionsCompleted[physicsState.activeMissionIndex] ? '✅' : ''}`;
+      document.getElementById('hud-mission-desc').textContent = m.objective;
+    }
+
+    function renderMissionsModal() {
+      const idx = physicsState.activeMissionIndex;
+      const m = MISSIONS_DATA[idx];
+      const tabsBar = document.getElementById('mission-tabs-bar');
+      const body = document.getElementById('mission-modal-body');
+
+      tabsBar.innerHTML = MISSIONS_DATA.map((item, i) => {
+        const done = physicsState.missionsCompleted[i];
+        const active = i === idx;
+        return `<button onclick="openMissionsModal(${i})" class="px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition ${
+          active
+            ? 'bg-indigo-600 text-white border border-indigo-400'
+            : done
+              ? 'bg-emerald-950/70 text-emerald-300 border border-emerald-500/40'
+              : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700'
+        }">${done ? '✅ ' : ''}${item.shortTitle}</button>`;
+      }).join('');
+
+      let interactiveArea = '';
+
+      if (idx === 0) {
+        interactiveArea = `
+          <div class="bg-slate-900/90 p-3.5 rounded-xl border border-sky-500/30 space-y-2.5">
+            <div class="font-bold text-sky-300 text-xs">Cadet Calculation Input (Apophis D = 370 m, ρ = 3,200 kg/m³):</div>
+            <div class="flex flex-wrap items-center gap-2">
+              <input type="number" step="0.01" id="m1-mass-input" placeholder="e.g. 8.49" class="bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-white font-mono-tech w-36 focus:border-sky-400 focus:outline-none">
+              <span class="font-mono-tech text-amber-300 text-xs">× 10¹⁰ kg</span>
+              <button onclick="checkMission1Answer()" class="px-3.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs">Verify Mass</button>
+            </div>
+            <div id="m1-feedback" class="text-xs"></div>
+          </div>`;
+      } else if (idx === 1) {
+        const baseE = physicsState.mission2BaselineEnergy_MT || 3470;
+        const currE = physicsState.kineticEnergy_MT;
+        const ratio = (currE / baseE).toFixed(2);
+        interactiveArea = `
+          <div class="bg-slate-900/90 p-3.5 rounded-xl border border-sky-500/30 space-y-2">
+            <div class="grid grid-cols-3 gap-2 text-center font-mono-tech text-xs">
+              <div class="bg-slate-950 p-2 rounded-lg"><span class="text-slate-400 block text-[10px]">Baseline (18.5 km/s)</span><span class="text-sky-300 font-bold">${baseE.toFixed(0)} MT</span></div>
+              <div class="bg-slate-950 p-2 rounded-lg"><span class="text-slate-400 block text-[10px]">Current (${physicsState.v0_kms.toFixed(1)} km/s)</span><span class="text-amber-300 font-bold">${currE.toFixed(0)} MT</span></div>
+              <div class="bg-slate-950 p-2 rounded-lg"><span class="text-slate-400 block text-[10px]">Energy Multiplier</span><span class="text-emerald-400 font-bold">${ratio}×</span></div>
+            </div>
+            <button onclick="setupMission2()" class="px-3 py-1.5 rounded-lg bg-indigo-600/80 hover:bg-indigo-500 text-white font-bold text-xs">Set v₀ = 37.0 km/s (2× Speed)</button>
+          </div>`;
+      } else if (idx === 2) {
+        interactiveArea = `
+          <div class="bg-slate-900/90 p-3.5 rounded-xl border border-emerald-500/30 space-y-2">
+            <div class="text-xs text-slate-300">Status: Preset = <strong class="text-white">${physicsState.diameter === 370 ? 'Apophis ✓' : 'Set to Apophis'}</strong> | Method = <strong class="text-white">${physicsState.deflectionMethod}</strong> | Lead Time = <strong class="text-amber-300">${physicsState.leadTimeYears.toFixed(1)} yrs</strong></div>
+            <button onclick="setupMission3()" class="px-3 py-1.5 rounded-lg bg-emerald-600/80 hover:bg-emerald-500 text-white font-bold text-xs">Configure Apophis &amp; Kinetic Impactor</button>
+          </div>`;
+      } else if (idx === 3) {
+        interactiveArea = `
+          <div class="bg-slate-900/90 p-3.5 rounded-xl border border-red-500/30 space-y-2.5">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-red-300">Scenario: 650m NEO | Lead Time: 15 Days (0.04 yrs)</span>
+              <button onclick="setupMission4()" class="px-2.5 py-1 rounded bg-red-600/80 hover:bg-red-500 text-white font-bold text-xs">Load Crisis Scenario</button>
+            </div>
+            <div class="text-xs text-slate-300">With 15 days warning, Gravity Tractor gives Δx ≈ <span class="font-mono-tech text-amber-300">&lt; 1 km</span> (impossible). Choose Commander Action:</div>
+            <div class="flex flex-wrap gap-2">
+              <button onclick="submitMission4Choice('evacuate')" class="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs">🚨 Order Mass Evacuation + Emergency Standoff</button>
+              <button onclick="submitMission4Choice('gravity')" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs">🛰️ Wait 10 Years for Gravity Tractor</button>
+            </div>
+            <div id="m4-feedback" class="text-xs"></div>
+          </div>`;
+      } else if (idx === 4) {
+        interactiveArea = `
+          <div class="bg-slate-900/90 p-3.5 rounded-xl border border-amber-500/30 space-y-2">
+            <div class="text-xs text-slate-300">Current Breakup Prediction: <strong class="text-amber-300">${physicsState.willAirburst ? `Airburst at ${physicsState.breakupAltitude_km.toFixed(1)} km ✓` : 'Surface Impact (Load Chelyabinsk)'}</strong></div>
+            <button onclick="setupMission5()" class="px-3 py-1.5 rounded-lg bg-amber-600/80 hover:bg-amber-500 text-white font-bold text-xs">Load Chelyabinsk (20m) &amp; Launch</button>
+          </div>`;
+      } else if (idx === 5) {
+        interactiveArea = `
+          <div class="bg-slate-900/90 p-3.5 rounded-xl border border-indigo-500/30 space-y-2">
+            <div class="text-xs text-slate-300">Generate a random NEO threat, then either deflect it off-course OR generate an Impact Assessment Report!</div>
+            <button onclick="setupMission6()" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs">🎲 Generate Final Exam NEO</button>
+          </div>`;
+      }
+
+      const taskReady = checkMissionTaskCondition(idx);
+      const quizDone = physicsState.quizPassed[idx];
+
+      const quizHtml = `
+        <div class="bg-slate-950/85 p-4 rounded-xl border ${taskReady ? 'border-emerald-500/40' : 'border-slate-800 opacity-75'} space-y-2.5">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-xs uppercase tracking-wider ${taskReady ? 'text-emerald-400' : 'text-slate-400'}">
+              ${taskReady ? '✅ Step 1 Complete! Answer Cadet Quiz to Complete Mission:' : '🔒 Step 2: Cadet Knowledge Check (Complete Step 1 First)'}
+            </span>
+          </div>
+          <p class="font-semibold text-slate-100 text-xs sm:text-sm">${m.quiz.question}</p>
+          <div class="space-y-1.5">
+            ${m.quiz.options.map((opt, oIdx) => `
+              <button onclick="answerMissionQuiz(${idx}, ${oIdx})" ${!taskReady ? 'disabled' : ''} class="w-full text-left px-3 py-2 rounded-lg border text-xs transition ${
+                quizDone && oIdx === m.quiz.correctIndex
+                  ? 'bg-emerald-950/80 border-emerald-400 text-emerald-200 font-bold'
+                  : 'bg-slate-900/90 border-slate-700 hover:border-sky-400 text-slate-200 disabled:cursor-not-allowed'
+              }">
+                ${String.fromCharCode(65 + oIdx)}. ${opt}
+              </button>
+            `).join('')}
+          </div>
+          <div id="quiz-feedback-${idx}" class="text-xs ${quizDone ? 'text-emerald-300' : ''}">
+            ${quizDone ? `🎉 ${m.quiz.explanation}` : ''}
+          </div>
+        </div>
+      `;
+
+      body.innerHTML = `
+        <div class="space-y-3">
+          <div class="bg-indigo-950/40 p-3.5 rounded-xl border border-indigo-500/30">
+            <h4 class="font-bold text-white text-sm mb-1">${m.title}</h4>
+            <p class="text-slate-300 text-xs leading-relaxed">${m.objective}</p>
+            <p class="text-amber-300/90 text-[11px] mt-2">${m.hint}</p>
+          </div>
+          ${interactiveArea}
+          ${quizHtml}
+        </div>
+      `;
+
+      const completedCount = physicsState.missionsCompleted.filter(Boolean).length;
+      document.getElementById('mission-progress-summary').textContent = `Completed: ${completedCount} / 6 Missions`;
+      updateMissionHUDCard();
+    }
+
+    function checkMission1Answer() {
+      const val = parseFloat(document.getElementById('m1-mass-input').value);
+      const fb = document.getElementById('m1-feedback');
+      if (!isNaN(val) && Math.abs(val - 8.49) <= 0.35) {
+        physicsState.mission1Solved = true;
+        fb.innerHTML = '<span class="text-emerald-400 font-bold">✓ Exact match! m = 3,200 × 2.65×10⁷ ≈ 8.49 × 10¹⁰ kg.</span>';
+        renderMissionsModal();
+      } else {
+        fb.innerHTML = '<span class="text-amber-400">Not quite. Calculate V = ⁴⁄₃π(185)³ ≈ 2.65×10⁷ m³, then multiply by ρ = 3,200 kg/m³.</span>';
+      }
+    }
+
+    function setupMission2() {
+      applyPreset('apophis');
+      physicsState.mission2BaselineEnergy_MT = physicsState.kineticEnergy_MT;
+      document.getElementById('slider-velocity').value = 37.0;
+      onPhysicsParamChange();
+      renderMissionsModal();
+    }
+
+    function setupMission3() {
+      applyPreset('apophis');
+      document.getElementById('deflection-method').value = 'kinetic';
+      document.getElementById('slider-leadtime').value = 12.0;
+      onDeflectionChange(true);
+      closeMissionsModal();
+    }
+
+    function setupMission4() {
+      document.getElementById('preset-select').value = 'custom';
+      document.getElementById('slider-diameter').value = 650;
+      document.getElementById('slider-density').value = 3200;
+      document.getElementById('slider-velocity').value = 22.0;
+      document.getElementById('slider-leadtime').value = 0.04;
+      document.getElementById('deflection-method').value = 'gravity';
+      onPhysicsParamChange();
+      onDeflectionChange(true);
+      renderMissionsModal();
+    }
+
+    function submitMission4Choice(choice) {
+      const fb = document.getElementById('m4-feedback');
+      if (choice === 'evacuate') {
+        physicsState.mission4Decision = 'evacuate';
+        fb.innerHTML = '<span class="text-emerald-400 font-bold">✓ Correct Commander Call! With 15 days warning, civil evacuation + emergency standoff is the only viable life-saving response.</span>';
+        renderMissionsModal();
+      } else {
+        fb.innerHTML = '<span class="text-red-400 font-bold">✕ Too late! The asteroid impacts in 15 days — waiting 10 years is impossible.</span>';
+      }
+    }
+
+    function setupMission5() {
+      applyPreset('chelyabinsk');
+      closeMissionsModal();
+      if (!physicsState.running) toggleSimulation();
+    }
+
+    function setupMission6() {
+      physicsState.mission6TargetGenerated = true;
+      generateRandomThreat();
+      closeMissionsModal();
+    }
+
+    function checkMissionTaskCondition(idx) {
+      if (physicsState.missionsCompleted[idx]) return true;
+      if (idx === 0) return Boolean(physicsState.mission1Solved);
+      if (idx === 1) return physicsState.v0_kms >= 36.5 && physicsState.diameter === 370;
+      if (idx === 2) return physicsState.outcome === 'deflected' && physicsState.deflectionMethod === 'kinetic' && physicsState.leadTimeYears >= 10;
+      if (idx === 3) return physicsState.mission4Decision === 'evacuate';
+      if (idx === 4) return physicsState.outcome === 'airburst' && physicsState.diameter <= 60;
+      if (idx === 5) return physicsState.mission6TargetGenerated && (physicsState.outcome === 'deflected' || physicsState.reportGenerated);
+      return false;
+    }
+
+    function evaluateActiveMissionProgress() {
+      updateMissionHUDCard();
+    }
+
+    function answerMissionQuiz(missionIdx, optionIdx) {
+      const m = MISSIONS_DATA[missionIdx];
+      const fb = document.getElementById(`quiz-feedback-${missionIdx}`);
+      if (optionIdx === m.quiz.correctIndex) {
+        physicsState.quizPassed[missionIdx] = true;
+        physicsState.missionsCompleted[missionIdx] = true;
+        if (m.badgeReward) {
+          unlockBadge(m.badgeReward);
+        }
+        updateCadetRankHUD();
+        updateMissionHUDCard();
+        renderMissionsModal();
+      } else if (fb) {
+        fb.innerHTML = '<span class="text-amber-400 font-semibold">Incorrect — review the physics formula above and try again!</span>';
+      }
+    }
+
+    // =========================================================================
+    // 9. UI GLOBALS & TECH GUIDE
+    // =========================================================================
+    function dismissWarningModal() {
+      const modal = document.getElementById('warning-modal');
+      if (modal) {
+        modal.style.opacity = '0';
+        setTimeout(() => modal.classList.add('hidden'), 300);
+      }
+      updateCadetRankHUD();
+      updateMissionHUDCard();
+    }
+
+    function setCameraMode(mode) {
+      cameraMode = mode;
+      document.querySelectorAll('.cam-btn').forEach(b => {
+        b.className = 'cam-btn hidden sm:inline-block px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:bg-slate-800/70 transition';
+      });
+      const activeBtn = document.getElementById(`cam-${mode}`);
+      if (activeBtn) {
+        activeBtn.className = 'cam-btn hidden sm:inline-block px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-sky-500/30 text-sky-300 border border-sky-400/40 transition';
+      }
+
+      if (mode === 'overview') camera.position.set(16, 18, 42);
+      else if (mode === 'asteroid' && asteroidGroup) camera.position.copy(asteroidGroup.position).add(new THREE.Vector3(6, 4, 8));
+      else if (mode === 'earth') camera.position.copy(closestApproachMarker.position).normalize().multiplyScalar(22);
+    }
+
+    function toggleSimulation() {
+      if (physicsState.ended) resetSimulation();
+      physicsState.running = !physicsState.running;
+      updateSimButtonUI();
+    }
+
+    function updateSimButtonUI() {
+      const icon = document.getElementById('sim-icon');
+      const text = document.getElementById('sim-btn-text');
+      if (physicsState.running) {
+        icon.textContent = '⏸'; text.textContent = 'Pause Simulation';
+      } else {
+        icon.textContent = '▶'; text.textContent = 'Start Simulation';
+      }
+    }
+
+    function setTimeScale(scale) {
+      physicsState.timeScale = scale;
+      document.querySelectorAll('.warp-btn').forEach(btn => {
+        if (parseInt(btn.dataset.warp) === scale) {
+          btn.className = 'warp-btn px-2 py-0.5 rounded bg-sky-500/30 text-sky-300 border border-sky-400/40';
+        } else {
+          btn.className = 'warp-btn px-2 py-0.5 rounded text-slate-400 hover:bg-slate-800';
+        }
+      });
+      updateLiveTelemetryUI();
+    }
+
+    function resetSimulation() {
+      physicsState.running = false;
+      physicsState.ended = false;
+      physicsState.outcome = null;
+      physicsState.simTime = 0;
+      physicsState.deflectionTriggered = false;
+      physicsState.historyV = [];
+      physicsState.historyA = [];
+
+      if (asteroidGroup) asteroidGroup.visible = true;
+      if (velocityArrow) velocityArrow.visible = true;
+      if (accelArrow) accelArrow.visible = true;
+      if (interceptorMesh) interceptorMesh.visible = false;
+      if (laserBeamMesh) laserBeamMesh.visible = false;
+
+      for (let i = 0; i < impactCraters.length; i++) {
+        earthMesh.remove(impactCraters[i].group);
+      }
+      impactCraters = [];
+      physicsState.lastImpactGeo = null;
+
+      const btn = document.getElementById('btn-launch-defense');
+      if (btn) {
+        btn.textContent = '🚀 Launch Interceptor Spacecraft';
+        btn.classList.replace('bg-teal-700', 'bg-emerald-600');
+      }
+
+      const badge = document.getElementById('status-badge');
+      if (badge) {
+        badge.textContent = 'THREAT ACTIVE';
+        badge.className = 'px-2 py-0.5 text-[10px] font-bold rounded-full bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse';
+      }
+
+      const toast = document.getElementById('event-toast');
+      if (toast) {
+        toast.classList.add('hidden');
+        toast.classList.remove('flex');
+      }
+
+      updateSimButtonUI();
+      initializeTrajectoryVectors();
+      updateLiveTelemetryUI();
+    }
+
+    function toggleLeftPanel() {
+      const left = document.getElementById('left-panel');
+      if (left) left.classList.toggle('-translate-x-[120%]');
+    }
+
+    function toggleRightPanel() {
+      const right = document.getElementById('right-panel');
+      if (right) {
+        if (right.classList.contains('hidden')) {
+          right.classList.remove('hidden');
+          right.classList.add('flex');
+        } else {
+          right.classList.add('hidden');
+          right.classList.remove('flex');
+        }
+      }
+    }
+
+    function openCadetMissionsModal() {
+      updateCadetRankHUD();
+      const modal = document.getElementById('cadet-missions-modal');
+      if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      }
+    }
+
+    function closeCadetMissionsModal() {
+      const modal = document.getElementById('cadet-missions-modal');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
+    }
+
+    function openSystemsModal() {
+      const modal = document.getElementById('systems-modal');
+      const content = document.getElementById('systems-modal-content');
+      if (content) {
+        content.innerHTML = `
+          <div class="bg-slate-900/70 p-3.5 rounded-xl border border-emerald-500/30">
+            <h4 class="font-bold text-emerald-400 mb-1">1. Kinetic Impactor (NASA DART Mission)</h4>
+            <p class="text-slate-300">A high-speed spacecraft impacts the asteroid head-on, transferring momentum <span class="font-mono-tech text-sky-300">Δv = β · m_sc · v_rel / M</span>.</p>
+          </div>
+          <div class="bg-slate-900/70 p-3.5 rounded-xl border border-amber-500/30">
+            <h4 class="font-bold text-amber-400 mb-1">2. Focused Laser Ablation</h4>
+            <p class="text-slate-300">Array lasers heat surface rock into a vapor jet, generating gentle continuous thrust <span class="font-mono-tech text-sky-300">F ≈ 8×10⁻⁵ N/W</span>.</p>
+          </div>
+          <div class="bg-slate-900/70 p-3.5 rounded-xl border border-sky-500/30">
+            <h4 class="font-bold text-sky-300 mb-1">3. Gravity Tractor Spacecraft</h4>
+            <p class="text-slate-300">A massive spacecraft hovers beside the NEO, using mutual gravity <span class="font-mono-tech text-sky-300">a = G · m_sc / d²</span> to tow it safely.</p>
+          </div>
+          <div class="bg-red-950/35 p-3.5 rounded-xl border border-red-500/40">
+            <h4 class="font-bold text-red-400 mb-1">4. Nuclear Standoff Pulse (Emergency Last Resort)</h4>
+            <p class="text-slate-300">Detonating a nuclear device at a calculated standoff distance vaporizes a thin surface layer for high impulse recoil.</p>
+          </div>
+        `;
+      }
+      if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      }
+    }
+
+    function closeSystemsModal() {
+      const modal = document.getElementById('systems-modal');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
+    }
+
+    function generateImpactReport() {
+      physicsState.reportGenerated = true;
+      const locInput = document.getElementById('target-location').value.trim();
+      const detectedGeo = physicsState.lastImpactGeo;
+      const locationName = locInput
+        ? locInput
+        : (detectedGeo ? `${detectedGeo.region} (${detectedGeo.latStr}, ${detectedGeo.lonStr})` : `${document.getElementById('eff-region').textContent}`);
+      const isOcean = locInput ? /ocean|sea|pacific|atlantic|indian|arctic/i.test(locationName) : (detectedGeo ? detectedGeo.isOcean : true);
+
+      const modal = document.getElementById('report-modal');
+      const content = document.getElementById('report-modal-content');
+      const hiroshimaRatio = Math.round(physicsState.kineticEnergy_MT / 0.015).toLocaleString('en-US');
+
+      const transientCrater_m = (physicsState.crater_km * 1000) / 1.25;
+      const initialRimWave_m = 0.07 * transientCrater_m;
+      const waveAt100km_m = physicsState.willAirburst
+        ? 0
+        : Math.max(0.5, initialRimWave_m * Math.pow(Math.max(0.05, (transientCrater_m * 0.5) / 100000), 0.7));
+
+      if (content) {
+        content.innerHTML = `
+          <div class="bg-slate-900/80 p-3.5 rounded-xl border border-indigo-500/30 space-y-1.5">
+            <div class="text-indigo-300 font-bold">📍 Junior Cadet Mission Report: ${locationName}</div>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2 text-xs">
+              <div><span class="text-slate-400 block">Diameter &amp; Mass:</span><span class="font-mono-tech font-bold text-white">${physicsState.diameter}m | ${formatScientific(physicsState.mass_kg, 'kg')}</span></div>
+              <div><span class="text-slate-400 block">Entry Velocity:</span><span class="font-mono-tech font-bold text-sky-400">${physicsState.v0_kms.toFixed(1)} km/s</span></div>
+              <div><span class="text-slate-400 block">Energy Yield:</span><span class="font-mono-tech font-bold text-red-400">${physicsState.kineticEnergy_MT.toFixed(2)} MT</span></div>
+            </div>
+          </div>
+          <p><strong>1. Kinetic Energy Analysis:</strong> The NEO carries <span class="font-mono-tech text-amber-300">${formatScientific(physicsState.kineticEnergy_J, 'J')}</span> — equivalent to <strong>${hiroshimaRatio}</strong> Hiroshima-class yields.</p>
+          <p><strong>2. Atmospheric &amp; Surface Consequences:</strong> ${
+            physicsState.willAirburst
+              ? `Atmospheric ram pressure causes an <strong>Airburst</strong> at <span class="font-mono-tech text-cyan-300">${physicsState.breakupAltitude_km.toFixed(1)} km</span> with shockwave radius <span class="font-mono-tech text-orange-300">${physicsState.airblast_km.toFixed(1)} km</span>.`
+              : isOcean
+                ? `An oceanic impact in <strong>${locationName}</strong> generates an estimated tsunami amplitude at <strong>100 km</strong> distance of <span class="font-mono-tech text-cyan-300">~${waveAt100km_m.toFixed(1)} meters</span>.`
+                : `A continental impact in <strong>${locationName}</strong> excavates a crater <span class="font-mono-tech text-orange-400">${physicsState.crater_km.toFixed(2)} km</span> across.`
+          }</p>
+          <p><strong>3. Seismic &amp; Defense Assessment:</strong> Shaking: <span class="font-mono-tech text-amber-300">${physicsState.seismic_Mw.toFixed(1)} Mw</span>. Lateral shift: <span class="font-mono-tech text-emerald-300">Δx ≈ ${Math.round(physicsState.computedShift_km).toLocaleString('en-US')} km</span>.</p>
+          <div class="bg-slate-950/80 border border-slate-800 rounded-lg p-2.5 text-[11px] text-slate-400">
+            <strong>Scientific Reference:</strong> Collins, Melosh, &amp; Marcus (2005) - Earth Impact Effects Program.
+          </div>
+        `;
+      }
+
+      if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      }
+      evaluateActiveMissionProgress();
+    }
+
+    function closeReportModal() {
+      const modal = document.getElementById('report-modal');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
+    }
+
+    function copyReportText() {
+      const content = document.getElementById('report-modal-content');
+      if (!content) return;
+      const textarea = document.createElement('textarea');
+      textarea.value = content.innerText;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+
+      const btn = document.getElementById('btn-copy-report');
+      if (btn) {
+        const orig = btn.textContent;
+        btn.textContent = '✓ Copied';
+        setTimeout(() => { btn.textContent = orig; }, 1800);
+      }
+    }
+
+    window.onload = function () {
+      initThreeScene();
+      onPhysicsParamChange();
+      initializeTrajectoryVectors();
+      updateCadetRankHUD();
+      updateMissionHUDCard();
+      animate();
+    };
+  </script>
+</body>
+</html>
